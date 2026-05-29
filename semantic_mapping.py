@@ -1,6 +1,12 @@
 import json
+import os
 import pandas as pd
-import requests  # Used to communicate with a local LLM via Ollama
+import requests  # Used to communicate with a cloud LLM API
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1").rstrip("/")
+OPENAI_API_TIMEOUT = int(os.getenv("OPENAI_API_TIMEOUT", "30"))
 
 # ---------------------------------
 # Load template configuration
@@ -96,37 +102,45 @@ def semantic_column_mapping(
     """
 
     # ------------------------------------------------------------
-    # Phase 3: Route payload to local LLM via Ollama API
+    # Phase 3: Route payload to a cloud LLM API
     # ------------------------------------------------------------
     try:
-        # Using explicit IP 127.0.0.1 to avoid Windows localhost routing glitches
-        url = "http://127.0.0.1:11434/api/generate"
-        payload = {
-            "model": "llama3",
-            "prompt": prompt,
-            "stream": False,
-            "format": "json"  
+        if not OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY environment variable is required for cloud LLM calls.")
+
+        url = f"{OPENAI_API_BASE}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
         }
-        
-        print("\n[DEBUG] Sending request to Ollama... please wait...")
-        # Added timeout=30 so if it doesn't answer in 30 seconds, it safely skips instead of freezing
-        response = requests.post(url, json=payload, timeout=30)
-        
+        payload = {
+            "model": OPENAI_MODEL,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.0,
+            "max_tokens": 1024
+        }
+
+        print("\n[DEBUG] Sending request to cloud LLM API... please wait...")
+        response = requests.post(url, headers=headers, json=payload, timeout=OPENAI_API_TIMEOUT)
+        response.raise_for_status()
+
         response_json = response.json()
-        llm_output = response_json.get("response", "{}")
-        
+        llm_output = response_json["choices"][0]["message"]["content"].strip()
+
         parsed_mapping = json.loads(llm_output)
         mapping_results.update(parsed_mapping)
-        print("[DEBUG] Ollama responded successfully!")
+        print("[DEBUG] Cloud LLM responded successfully!")
 
     except requests.exceptions.Timeout:
-        print("\n[WARNING] Ollama request timed out! Falling back to UNKNOWN mappings.")
+        print("\n[WARNING] Cloud LLM request timed out! Falling back to UNKNOWN mappings.")
         for col in columns_to_evaluate.keys():
             if col not in mapping_results:
                 mapping_results[col] = "UNKNOWN"
 
     except Exception as e:
-        print(f"\n[WARNING] Ollama connection error: {str(e)}. Falling back to UNKNOWN.")
+        print(f"\n[WARNING] Cloud LLM connection error: {str(e)}. Falling back to UNKNOWN.")
         for col in columns_to_evaluate.keys():
             if col not in mapping_results:
                 mapping_results[col] = "UNKNOWN"
