@@ -3,10 +3,21 @@ import os
 import pandas as pd
 import requests  # Used to communicate with a cloud LLM API
 
+try:
+    import streamlit as st
+except Exception:
+    st = None
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
 OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1").rstrip("/")
 OPENAI_API_TIMEOUT = int(os.getenv("OPENAI_API_TIMEOUT", "30"))
+
+if st is not None:
+    OPENAI_API_KEY = OPENAI_API_KEY or str(st.secrets.get("OPENAI_API_KEY", "")).strip()
+    OPENAI_MODEL = OPENAI_MODEL or str(st.secrets.get("OPENAI_MODEL", "gpt-4o-mini")).strip()
+    OPENAI_API_BASE = OPENAI_API_BASE or str(st.secrets.get("OPENAI_API_BASE", "https://api.openai.com/v1")).rstrip("/")
+    OPENAI_API_TIMEOUT = int(st.secrets.get("OPENAI_API_TIMEOUT", OPENAI_API_TIMEOUT))
 
 # ---------------------------------
 # Load template configuration
