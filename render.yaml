@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: dataset-harmonization-app
+    env: python
+    plan: standard
+    pythonVersion: 3.11
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port=10000 --server.address=0.0.0.0
+    envVars:
+      - key: ENVIRONMENT
+        value: "production"
+      - key: DEBUG
+        value: "false"
+      - key: OLLAMA_HOST
+        value: "http://your-ollama-server:11434"
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    routes:
+      - path: /
+        destination: /
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN

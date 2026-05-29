@@ -1,0 +1,21 @@
+{
+    "entity_id": "unique identifier for an entity or record",
+
+    "entity_name":
+    "name of product, student, patient, employee or item",
+
+    "category":
+    "type, subject, diagnosis, department or product category",
+
+    "numeric_value":
+    "main measurable numeric value such as marks, salary, amount, price or score",
+
+    "quantity":
+    "quantity, count or frequency",
+
+    "timestamp":
+    "date and time of an event or record",
+
+    "location":
+    "geographical location, branch, city or region"
+}

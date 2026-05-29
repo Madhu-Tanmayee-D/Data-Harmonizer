@@ -1,0 +1,37 @@
+{
+    "invoice": "entity_id",
+    "invoice_id": "entity_id",
+    "student_id": "entity_id",
+    "patient_id": "entity_id",
+    "employee_id": "entity_id",
+
+    "description": "entity_name",
+    "product_name": "entity_name",
+    "student_name": "entity_name",
+    "employee_name": "entity_name",
+    "name": "entity_name",
+
+    "subject": "category",
+    "product_line": "category",
+    "department": "category",
+    "diagnosis": "category",
+    "type": "category",
+
+    "price": "numeric_value",
+    "sales": "numeric_value",
+    "marks": "numeric_value",
+    "salary": "numeric_value",
+    "score": "numeric_value",
+
+    "quantity": "quantity",
+
+    "invoicedate": "timestamp",
+    "datetime": "timestamp",
+    "date": "timestamp",
+    "purchase_date": "timestamp",
+
+    "country": "location",
+    "city": "location",
+    "branch": "location",
+    "hospital": "location"
+}

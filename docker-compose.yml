@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Ollama service for LLM
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-llama3
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    command: serve
+    networks:
+      - harmonization_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Streamlit app service
+  app:
+    build: .
+    container_name: harmonization-app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./user_outputs:/app/user_outputs
+      - ./outputs:/app/outputs
+      - ./app_database.db:/app/app_database.db
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - harmonization_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  harmonization_network:
+    driver: bridge
+
+volumes:
+  ollama_data:
+    driver: local
