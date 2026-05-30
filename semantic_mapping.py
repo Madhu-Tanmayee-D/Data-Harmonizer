@@ -13,11 +13,31 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
 OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1").rstrip("/")
 OPENAI_API_TIMEOUT = int(os.getenv("OPENAI_API_TIMEOUT", "30"))
 
+HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "").strip()
+HUGGINGFACE_MODEL = os.getenv("HUGGINGFACE_MODEL", "google/flan-t5-large").strip()
+HUGGINGFACE_API_BASE = os.getenv("HUGGINGFACE_API_BASE", "https://api-inference.huggingface.co").rstrip("/")
+HUGGINGFACE_API_TIMEOUT = int(os.getenv("HUGGINGFACE_API_TIMEOUT", "30"))
+
 if st is not None:
-    OPENAI_API_KEY = OPENAI_API_KEY or str(st.secrets.get("OPENAI_API_KEY", "")).strip()
-    OPENAI_MODEL = OPENAI_MODEL or str(st.secrets.get("OPENAI_MODEL", "gpt-4o-mini")).strip()
-    OPENAI_API_BASE = OPENAI_API_BASE or str(st.secrets.get("OPENAI_API_BASE", "https://api.openai.com/v1")).rstrip("/")
-    OPENAI_API_TIMEOUT = int(st.secrets.get("OPENAI_API_TIMEOUT", OPENAI_API_TIMEOUT))
+    def get_st_secret(key, default="", section=None):
+        try:
+            if section is not None:
+                section_data = st.secrets.get(section, {})
+                if isinstance(section_data, dict):
+                    return str(section_data.get(key, default)).strip()
+            return str(st.secrets.get(key, default)).strip()
+        except Exception:
+            return str(default).strip()
+
+    OPENAI_API_KEY = OPENAI_API_KEY or get_st_secret("api_key", "", section="openai") or get_st_secret("OPENAI_API_KEY", "")
+    OPENAI_MODEL = OPENAI_MODEL or get_st_secret("model", "gpt-4o-mini", section="openai") or get_st_secret("OPENAI_MODEL", "gpt-4o-mini")
+    OPENAI_API_BASE = OPENAI_API_BASE or get_st_secret("api_base", "https://api.openai.com/v1", section="openai").rstrip("/") or get_st_secret("OPENAI_API_BASE", "https://api.openai.com/v1").rstrip("/")
+    OPENAI_API_TIMEOUT = int(get_st_secret("api_timeout", OPENAI_API_TIMEOUT, section="openai") or OPENAI_API_TIMEOUT)
+
+    HUGGINGFACE_API_KEY = HUGGINGFACE_API_KEY or get_st_secret("api_key", "", section="huggingface") or get_st_secret("HUGGINGFACE_API_KEY", "")
+    HUGGINGFACE_MODEL = HUGGINGFACE_MODEL or get_st_secret("model", "google/flan-t5-large", section="huggingface") or get_st_secret("HUGGINGFACE_MODEL", "google/flan-t5-large")
+    HUGGINGFACE_API_BASE = HUGGINGFACE_API_BASE or get_st_secret("api_base", "https://api-inference.huggingface.co", section="huggingface").rstrip("/") or get_st_secret("HUGGINGFACE_API_BASE", "https://api-inference.huggingface.co").rstrip("/")
+    HUGGINGFACE_API_TIMEOUT = int(get_st_secret("api_timeout", HUGGINGFACE_API_TIMEOUT, section="huggingface") or HUGGINGFACE_API_TIMEOUT)
 
 # ---------------------------------
 # Load template configuration
@@ -116,29 +136,61 @@ def semantic_column_mapping(
     # Phase 3: Route payload to a cloud LLM API
     # ------------------------------------------------------------
     try:
-        if not OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY environment variable is required for cloud LLM calls.")
+        if OPENAI_API_KEY:
+            url = f"{OPENAI_API_BASE}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": OPENAI_MODEL,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.0,
+                "max_tokens": 1024
+            }
+            api_timeout = OPENAI_API_TIMEOUT
 
-        url = f"{OPENAI_API_BASE}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": OPENAI_MODEL,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.0,
-            "max_tokens": 1024
-        }
+            print("\n[DEBUG] Sending request to OpenAI-compatible cloud LLM API... please wait...")
+        elif HUGGINGFACE_API_KEY:
+            url = f"{HUGGINGFACE_API_BASE}/models/{HUGGINGFACE_MODEL}"
+            headers = {
+                "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "inputs": prompt,
+                "parameters": {
+                    "max_new_tokens": 1024,
+                    "temperature": 0.0
+                },
+                "options": {
+                    "wait_for_model": True
+                }
+            }
+            api_timeout = HUGGINGFACE_API_TIMEOUT
 
-        print("\n[DEBUG] Sending request to cloud LLM API... please wait...")
-        response = requests.post(url, headers=headers, json=payload, timeout=OPENAI_API_TIMEOUT)
+            print("\n[DEBUG] Sending request to Hugging Face inference API... please wait...")
+        else:
+            raise ValueError("OPENAI_API_KEY or HUGGINGFACE_API_KEY environment variable is required for cloud LLM calls.")
+
+        response = requests.post(url, headers=headers, json=payload, timeout=api_timeout)
         response.raise_for_status()
 
         response_json = response.json()
-        llm_output = response_json["choices"][0]["message"]["content"].strip()
+        if isinstance(response_json, dict) and "choices" in response_json:
+            llm_output = response_json["choices"][0]["message"]["content"].strip()
+        elif isinstance(response_json, dict) and "generated_text" in response_json:
+            llm_output = response_json["generated_text"].strip()
+        elif isinstance(response_json, list) and response_json:
+            first = response_json[0]
+            if isinstance(first, dict) and "generated_text" in first:
+                llm_output = first["generated_text"].strip()
+            else:
+                llm_output = response.text.strip()
+        else:
+            llm_output = response.text.strip()
 
         parsed_mapping = json.loads(llm_output)
         mapping_results.update(parsed_mapping)
