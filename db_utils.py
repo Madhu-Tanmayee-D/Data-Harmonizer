@@ -132,7 +132,24 @@ def get_user_processing_history(user_id):
     finally:
         close_db_connection(conn)
 
-
+def get_user_info(user_id):
+    """Retrieve user profile information from the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT email, created_at 
+            FROM users 
+            WHERE user_id = ?
+        ''', (user_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    except Exception as e:
+        print(f"Error fetching user info: {e}")
+        return None
+    finally:
+        close_db_connection(conn)
+        
 def get_user_download_history(user_id):
     """Get all downloads by a user."""
     conn = get_db_connection()
