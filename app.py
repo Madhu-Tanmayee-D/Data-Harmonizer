@@ -13,7 +13,7 @@ import json
 
 # Local asset paths
 ROOT_DIR = Path(__file__).resolve().parent
-LOGO_PATH = ROOT_DIR / "Logo.png"
+LOGO_PATH = Path(r"E:\NGIT\3-2 Sem\Mini Project\Logo.png")
 
 # Import custom modules
 from config import UPLOADS_DIR, OUTPUTS_DIR
