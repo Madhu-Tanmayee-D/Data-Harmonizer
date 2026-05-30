@@ -482,18 +482,26 @@ def render_sidebar():
     st.sidebar.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
     
     # 2. User info section
-    st.sidebar.markdown(f"### <span style='color: #e1b995;'>✦ <span style='color: #e1b995;'>{st.session_state.username}</span>", unsafe_allow_html=True)
-    
-    user_info = get_user_info(st.session_state.user_id)
+    st.sidebar.markdown(f"### <span style='color: #e1b995;'>✦ <span style='color: #e1b995;'>{st.session_state.get('username', 'User')}</span>", unsafe_allow_html=True)
+
+    # Attempt to fetch user info gracefully
+    user_info = None
+    try:
+        user_info = get_user_info(st.session_state.user_id)
+    except Exception:
+        # If the database fails, we silently skip loading the extra info
+        pass
+
     if user_info:
-        # Keeping your original icon/styling logic
-        st.sidebar.markdown(f'<span style="font-size: 0.8rem;">✉ {user_info["email"]}</span>', unsafe_allow_html=True)
-        # Added the requested Account Creation Date
-        created_date = user_info.get("created_at", "N/A").split(' ')[0]
-        st.sidebar.markdown(f'<span style="font-size: 0.8rem;">Account Creation Date: {created_date}</span>', unsafe_allow_html=True)
-    else:
-        # Debugging: If this prints in the sidebar, your database connection is failing on deploy
-        st.sidebar.error("Could not load user data.")
+        # Display email
+        email = user_info.get("email", "N/A")
+        st.sidebar.markdown(f'<span style="font-size: 0.8rem;">✉ {email}</span>', unsafe_allow_html=True)
+        
+        # Display Account Creation Date
+        created_at = user_info.get("created_at")
+        if created_at:
+            created_date = str(created_at).split(' ')[0]
+            st.sidebar.markdown(f'<span style="font-size: 0.8rem;">Account Creation Date: {created_date}</span>', unsafe_allow_html=True)
     
     st.sidebar.divider()
     
