@@ -193,15 +193,32 @@ def get_download_file_path(download_id):
     finally:
         close_db_connection(conn)
 
-def update_user_info(user_id, new_username=None, new_email=None):
-    """Updates user profile information in the database."""
+import hashlib
+import os
+from auth import hash_password
+
+def update_user_info(user_id, new_username=None, new_email=None, new_password=None):
+    """Updates user profile information, including optional password, in the database."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        # Update Username
         if new_username:
             cursor.execute("UPDATE users SET username = ? WHERE user_id = ?", (new_username, user_id))
+        
+        # Update Email
         if new_email:
             cursor.execute("UPDATE users SET email = ? WHERE user_id = ?", (new_email, user_id))
+        
+        # Update Password (if provided)
+        # Update Password (if provided)
+        if new_password:
+            # This calls the SAME function used by register_user
+            hashed_password = hash_password(new_password)
+            
+            # This saves it in the exact same format (salt$hash) that login expects
+            cursor.execute("UPDATE users SET password_hash = ? WHERE user_id = ?", (hashed_password, user_id))
+            
         conn.commit()
         return True
     except Exception as e:

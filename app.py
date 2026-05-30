@@ -448,9 +448,15 @@ def render_auth_page():
                 else:
                     success, message = register_user(username, email, password)
                     if success:
-                        st.success(f"✅ {message}\nYou can now login!")
-                        st.session_state.auth_view = 'login'
-                        st.rerun()
+                        # Instead of fetching a DB ID, we use the username as the unique identifier
+                        st.session_state.user_id = username 
+                        st.session_state.username = username
+                        
+                        # Clearing auth_view signals the main loop that the user is logged in
+                        st.session_state.auth_view = None 
+                        
+                        st.success(f"✅ Account created! Redirecting...")
+                        st.rerun() 
                     else:
                         st.error(f"❌ {message}")
                         
@@ -865,11 +871,24 @@ def render_settings():
         new_username = st.text_input("New Username", value=st.session_state.username)
         new_email = st.text_input("New Email", value=email_val)
         
+        st.markdown("### Change Password")
+        new_password = st.text_input("New Password", type="password")
+        confirm_password = st.text_input("Confirm New Password", type="password")
+        
         if st.form_submit_button("Update Profile", type="primary"):
+            # Validation logic
             if "@" not in new_email:
                 st.error("Please enter a valid email address.")
+            elif new_password and new_password != confirm_password:
+                st.error("Passwords don't match!")
             else:
-                if update_user_info(st.session_state.user_id, new_username, new_email):
+                # Prepare data
+                # Note: Pass None or empty string if user didn't type a new password
+                password_to_update = new_password if new_password else None
+                
+                # Call your backend update function
+                # Make sure your update_user_info function is updated to accept 'password'
+                if update_user_info(st.session_state.user_id, new_username, new_email, password_to_update):
                     st.session_state.username = new_username
                     st.success("Profile updated successfully!")
                     st.rerun()
