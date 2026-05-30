@@ -483,9 +483,18 @@ def render_sidebar():
     
     # 2. User info section
     st.sidebar.markdown(f"### <span style='color: #e1b995;'>✦ <span style='color: #e1b995;'>{st.session_state.username}</span>", unsafe_allow_html=True)
+    
     user_info = get_user_info(st.session_state.user_id)
     if user_info:
+        # Keeping your original icon/styling logic
         st.sidebar.markdown(f'<span style="font-size: 0.8rem;">✉ {user_info["email"]}</span>', unsafe_allow_html=True)
+        # Added the requested Account Creation Date
+        created_date = user_info.get("created_at", "N/A").split(' ')[0]
+        st.sidebar.markdown(f'<span style="font-size: 0.8rem;">Account Creation Date: {created_date}</span>', unsafe_allow_html=True)
+    else:
+        # Debugging: If this prints in the sidebar, your database connection is failing on deploy
+        st.sidebar.error("Could not load user data.")
+    
     st.sidebar.divider()
     
     # Helper to maintain uniform button sizes
