@@ -7,7 +7,8 @@ from datetime import datetime
 from pathlib import Path
 
 
-DB_PATH = "app_database.db"
+BASE_DIR = Path(__file__).resolve().parent
+DB_PATH = BASE_DIR / "app_database.db"
 
 
 def init_database():
@@ -42,6 +43,7 @@ def init_database():
     ''')
     
     # Processing history table
+    # MODIFIED: Added harmonized_filename, harmonized_path, and harmonized_size
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS processing_history (
             process_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,6 +54,9 @@ def init_database():
             process_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             completion_timestamp TIMESTAMP,
             error_message TEXT,
+            harmonized_filename TEXT,
+            harmonized_path TEXT,
+            harmonized_size INTEGER,
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
             FOREIGN KEY (upload_id_1) REFERENCES upload_history(upload_id),
             FOREIGN KEY (upload_id_2) REFERENCES upload_history(upload_id)
