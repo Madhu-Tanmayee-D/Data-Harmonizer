@@ -20,9 +20,17 @@ from config import UPLOADS_DIR, OUTPUTS_DIR
 from database import init_database, DB_PATH
 from auth import register_user, login_user, get_user_info, user_exists
 from db_utils import (
-    save_upload_record, get_user_uploads, save_processing_record,
-    update_processing_status, save_download_record, get_user_processing_history,
-    get_user_download_history, get_processing_details, get_download_file_path
+    save_upload_record, 
+    get_user_uploads, 
+    save_processing_record,
+    update_processing_status, 
+    save_download_record, 
+    get_user_processing_history,
+    get_user_download_history, 
+    get_processing_details, 
+    get_download_file_path,
+    delete_user_account,    
+    update_user_info        
 )
 from pipeline import run_pipeline
 
@@ -100,8 +108,8 @@ st.markdown("""
     button[data-testid="stActionButtonIcon"] svg, 
     div[data-testid="stToolbarOptionsButton"] button svg,
     .stAppHeader [data-testid="stToolbar"] svg {
-        fill: #a7f3d0 !important;
-        color: #a7f3d0 !important;
+        fill: #c48a6a !important;
+        color: #c48a6a !important;
     }
     
     /* Pure Dark Charcoal Gradient Canvas */
@@ -213,7 +221,7 @@ st.markdown("""
         margin: 0 auto !important;
         padding: 2.5rem !important;
         border-radius: 12px !important;
-        background-color: #16161a !important;
+        background-color: #000000 !important;
         border: 1px solid #27272a !important;
         box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5) !important;
     }
@@ -246,7 +254,7 @@ st.markdown("""
     }
 
     .stButton > button {
-        background-color: #27272a !important;
+        background-color: #000000 !important;
         color: #e8f5e9 !important;
         border: 1px solid #3f3f46 !important;
         border-radius: 8px !important;
@@ -335,6 +343,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+    <style>
+    /* Reduce the default top padding of the main content block */
+    .stMainBlockContainer {
+        padding-top: 2rem !important;
+    }
+    
+    /* Optional: If you want to pull the header even closer to the top */
+    .main-header {
+        margin-top: -2rem !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Initialize database
 if not os.path.exists(DB_PATH):
     init_database()
@@ -377,7 +399,7 @@ def render_auth_page():
     # MOVE LOGO CALLS HERE: This ensures it renders before the title
     render_logo(size=120)
     
-    st.markdown("<h1 class='main-header'>Dataset Harmonization</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 class='main-header'>Data Harmonizer</h1>", unsafe_allow_html=True)
     
     # Inject a clean anchor element
     st.markdown("<div class='auth-card-anchor'></div>", unsafe_allow_html=True)
@@ -467,23 +489,25 @@ def render_sidebar():
             return st.button(label, key=key, use_container_width=True)
 
     # 3. Navigation
-    # Very tight spacing (10px) instead of <br>
     st.sidebar.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
     if centered_button("❖ Dashboard", "btn_dash"):
         st.session_state.current_page = 'dashboard'
         st.rerun()
     
-    # Tight spacing between Dashboard and History
     st.sidebar.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
     
     if centered_button("▤ History", "btn_hist"):
         st.session_state.current_page = 'history'
         st.rerun()
 
-    # Tight spacing before divider
+    # New Settings Button
     st.sidebar.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
     
+    if centered_button("⚙ Settings", "btn_settings"):
+        st.session_state.current_page = 'settings'
+        st.rerun()
+
     # 4. Logout
     st.sidebar.divider()
     if centered_button("⎋ Logout", "btn_logout"):
@@ -801,6 +825,89 @@ def render_history():
         st.info("No processing history yet")
 
 
+def render_settings():
+
+    st.markdown("""
+    <style>
+    /* CSS for standard buttons */
+    div.stFormSubmitButton > button {
+        background-color: #000000 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #52525b !important;
+        font-weight: bold !important;
+        border-radius: 5px !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+
+    div.stFormSubmitButton > button:hover {
+        background-color: #71717a !important;
+        color: #FFFFFF !important;
+        border: 1px solid #a1a1aa !important;
+        box-shadow: 0 0 8px rgba(161, 161, 170, 0.5) !important;
+    }
+
+    /* CSS to force left alignment */
+    .left-align-btn {
+        display: flex;
+        justify-content: flex-start;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<h1 class='main-header'>Settings</h1>", unsafe_allow_html=True)
+    
+    # 1. Profile Management Section
+    st.subheader("Edit Profile")
+    with st.form("profile_form"):
+        user_info = get_user_info(st.session_state.user_id)
+        email_val = user_info.get("email", "") if user_info else ""
+        
+        new_username = st.text_input("New Username", value=st.session_state.username)
+        new_email = st.text_input("New Email", value=email_val)
+        
+        if st.form_submit_button("Update Profile", type="primary"):
+            if "@" not in new_email:
+                st.error("Please enter a valid email address.")
+            else:
+                if update_user_info(st.session_state.user_id, new_username, new_email):
+                    st.session_state.username = new_username
+                    st.success("Profile updated successfully!")
+                    st.rerun()
+                else:
+                    st.error("Failed to update profile.")
+
+    st.markdown("---")
+    
+    # 2. Danger Zone Section
+    st.subheader("Account Deletion")
+    st.write("⚠️ Deleting your account will permanently remove all your upload history, processing history, and downloaded files from our server.")
+    
+    if 'show_delete_confirm' not in st.session_state:
+        st.session_state.show_delete_confirm = False
+
+    # Button wrapped in a div to force left-alignment
+    st.markdown('<div class="left-align-btn">', unsafe_allow_html=True)
+    if st.button("Delete My Account"):
+        st.session_state.show_delete_confirm = True
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if st.session_state.show_delete_confirm:
+        confirm = st.checkbox("I understand that this action cannot be undone and will delete all my data.")
+        
+        if confirm:
+            if st.button("Confirm Permanently Delete", type="primary"):
+                if delete_user_account(st.session_state.user_id):
+                    st.success("Account deleted successfully.")
+                    st.session_state.clear()
+                    st.rerun() 
+                else:
+                    st.error("Error occurred while deleting account.")
+        
+        if st.button("Cancel"):
+            st.session_state.show_delete_confirm = False
+            st.rerun()
+
 def main():
     """Main application logic incorporating clean URL-driven navigation routers."""
     # Catch active URL parameters to switch views reliably without input conflict loops
@@ -819,10 +926,13 @@ def main():
         if 'current_page' not in st.session_state:
             st.session_state.current_page = 'dashboard'
             
+        # Navigation router
         if st.session_state.current_page == 'dashboard':
             render_dashboard()
         elif st.session_state.current_page == 'history':
             render_history()
+        elif st.session_state.current_page == 'settings':
+            render_settings()
 
 
 if __name__ == "__main__":

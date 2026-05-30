@@ -192,3 +192,52 @@ def get_download_file_path(download_id):
         return row['file_path'] if row else None
     finally:
         close_db_connection(conn)
+
+def update_user_info(user_id, new_username=None, new_email=None):
+    """Updates user profile information in the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if new_username:
+            cursor.execute("UPDATE users SET username = ? WHERE user_id = ?", (new_username, user_id))
+        if new_email:
+            cursor.execute("UPDATE users SET email = ? WHERE user_id = ?", (new_email, user_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error updating profile: {e}")
+        return False
+    finally:
+        close_db_connection(conn)
+
+def delete_user_account(user_id):
+    """Deletes a user, their database records, and their physical files."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # 1. Get file paths to delete from disk
+        cursor.execute("SELECT file_path FROM upload_history WHERE user_id = ?", (user_id,))
+        upload_files = cursor.fetchall()
+        cursor.execute("SELECT harmonized_path FROM processing_history WHERE user_id = ? AND harmonized_path IS NOT NULL", (user_id,))
+        process_files = cursor.fetchall()
+        
+        # 2. Delete physical files from server
+        for row in upload_files + process_files:
+            path = row[0]
+            if path and os.path.exists(path):
+                os.remove(path)
+        
+        # 3. Delete database records (Must delete history before user)
+        cursor.execute("DELETE FROM download_history WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM processing_history WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM upload_history WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error during deletion: {e}")
+        return False
+    finally:
+        close_db_connection(conn)
