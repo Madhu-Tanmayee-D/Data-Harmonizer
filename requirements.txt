@@ -1,6 +1,7 @@
 # Core Dependencies
 pandas==2.2.3
 numpy==1.24.3
+matplotlib
 
 # Frontend
 streamlit==1.38.0
