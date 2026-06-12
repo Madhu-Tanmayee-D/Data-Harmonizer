@@ -56,7 +56,7 @@ def save_processing_record(user_id, upload_id_1, upload_id_2):
     try:
         cursor.execute('''
             INSERT INTO processing_history (user_id, upload_id_1, upload_id_2, status)
-            VALUES (?, ?, ?, 'processing')
+            VALUES (?, ?, ?, 'Processing')
         ''', (user_id, upload_id_1, upload_id_2))
         
         conn.commit()
@@ -65,28 +65,75 @@ def save_processing_record(user_id, upload_id_1, upload_id_2):
         close_db_connection(conn)
 
 
-def update_processing_status(process_id, status, error_message=None, harmonized_data=None):
+def update_processing_status(
+    process_id,
+    status,
+    error_message=None,
+    harmonized_data=None
+):
+    """
+    Update processing status and optionally attach
+    harmonized output metadata.
+    """
+
     conn = get_db_connection()
     cursor = conn.cursor()
+
     try:
+        # Normalize status capitalization
+        status = str(status).strip().capitalize()
+
+        # Determine completion timestamp
+        completion_time = (
+            datetime.now()
+            if status in ['Completed', 'Failed', 'completed', 'failed']
+            else None
+        )
+
+        # Case 1: Harmonized output exists
         if harmonized_data:
             cursor.execute('''
                 UPDATE processing_history
-                SET status = ?, completion_timestamp = ?, error_message = ?,
-                    harmonized_filename = ?, harmonized_path = ?, harmonized_size = ?
+                SET
+                    status = ?,
+                    completion_timestamp = ?,
+                    error_message = ?,
+                    harmonized_filename = ?,
+                    harmonized_path = ?,
+                    harmonized_size = ?,
+                    report_filename = ?,
+                    report_path = ?
                 WHERE process_id = ?
-            ''', (status, datetime.now(), error_message, 
-                  harmonized_data['name'], harmonized_data['path'], harmonized_data['size'], 
-                  process_id))
+            ''', (
+                status,
+                completion_time,
+                error_message,
+                harmonized_data.get('name'),
+                harmonized_data.get('path'),
+                harmonized_data.get('size'),
+                harmonized_data.get('report_filename'),
+                harmonized_data.get('report_path'),
+                process_id
+            ))
+
+        # Case 2: Standard update
         else:
-            # Fallback for standard updates
             cursor.execute('''
                 UPDATE processing_history
-                SET status = ?, completion_timestamp = ?, error_message = ?
+                SET
+                    status = ?,
+                    completion_timestamp = ?,
+                    error_message = ?
                 WHERE process_id = ?
-            ''', (status, datetime.now() if status in ['completed', 'failed'] else None, 
-                  error_message, process_id))
+            ''', (
+                status,
+                completion_time,
+                error_message,
+                process_id
+            ))
+
         conn.commit()
+
     finally:
         close_db_connection(conn)
 
@@ -120,7 +167,7 @@ def get_user_processing_history(user_id):
                 ph.process_id, ph.status, ph.process_timestamp, ph.completion_timestamp,
                 uh1.filename as dataset1, uh1.file_size as size1, uh1.file_path as path1,
                 uh2.filename as dataset2, uh2.file_size as size2, uh2.file_path as path2,
-                ph.harmonized_filename, ph.harmonized_path, ph.harmonized_size
+                ph.harmonized_filename, ph.harmonized_path, ph.harmonized_size, ph.report_filename, ph.report_path
             FROM processing_history ph
             LEFT JOIN upload_history uh1 ON ph.upload_id_1 = uh1.upload_id
             LEFT JOIN upload_history uh2 ON ph.upload_id_2 = uh2.upload_id

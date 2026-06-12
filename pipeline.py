@@ -1,34 +1,23 @@
 import os
 import pandas as pd
 
-from dataset_loader import (
-    load_all_datasets
-)
+from dataset_loader import (load_all_datasets)
 
-from semantic_mapping import (
-    semantic_column_mapping
-)
+from semantic_mapping import (semantic_column_mapping)
 
-from harmonization import (
-    harmonize_dataset
-)
+from harmonization import (harmonize_dataset)
 
+from report_generator import generate_report
 
 # ---------------------------------
 # Complete Harmonization Pipeline
 # ---------------------------------
-def run_pipeline(
-    uploaded_files
-):
+def run_pipeline(uploaded_files):
 
     # --------------------------
     # Load datasets
     # --------------------------
-    datasets = (
-        load_all_datasets(
-            uploaded_files
-        )
-    )
+    datasets = (load_all_datasets(uploaded_files))
 
     harmonized_outputs = {}
 
@@ -46,10 +35,7 @@ def run_pipeline(
     # --------------------------
     # Process all datasets
     # --------------------------
-    for (
-        dataset_name,
-        dataset_info
-    ) in datasets.items():
+    for (dataset_name, dataset_info) in datasets.items():
 
         # ---------------------------------------------------------------------
         # Extract metadata constraints dynamically for semantic_column_mapping
@@ -64,13 +50,16 @@ def run_pipeline(
         # ----------------------
         try:
             # Invoking the semantic mapping function passing all required validation bounds
-            mapping = (
+            mapping_result = (
                 semantic_column_mapping(
                     dataset_info["schema"],
                     template_columns=template_cols,
                     sample_rows=sample_rows_json
                 )
             )
+
+            mapping = mapping_result["mapping"]
+            reasoning = mapping_result.get("reasoning", {})
         except TypeError:
             # Defensive fallback path in case some structural variants pass unexpected parameters
             mapping = (
@@ -78,6 +67,7 @@ def run_pipeline(
                     dataset_info["schema"]
                 )
             )
+            reasoning = {}
 
         # ----------------------
         # Harmonization
@@ -94,44 +84,29 @@ def run_pipeline(
         # ----------------------
         # Save output
         # ----------------------
-        os.makedirs(
-            "outputs",
-            exist_ok=True
-        )
+        os.makedirs("outputs", exist_ok=True)
 
         output_path = (
             f"outputs/"
             f"{dataset_name}"
-            f"_harmonized.csv"
+            f".csv"
         )
 
-        harmonized_df.to_csv(
-            output_path,
-            index=False
-        )
+        harmonized_df.to_csv(output_path, index=False)
 
-        harmonized_outputs[
-            dataset_name
-        ] = harmonized_df
+        harmonized_outputs[dataset_name] = harmonized_df
+        dataset_info["mapping"] = mapping
+        dataset_info["reasoning"] = reasoning
 
-    return (
-        harmonized_outputs
-    )
-
-
-# ---------------------------------
-# Run Pipeline
-# ---------------------------------
-if __name__ == "__main__":
-
-    uploaded_files = [
-        r"E:\NGIT\3-2 Sem\Mini Project\Dataset\Online Retail Datasets\Online Retail\online_retail.csv",
-        r"E:\NGIT\3-2 Sem\Mini Project\Dataset\Online Retail Datasets\Supermarket Sales\supermarket_sales.csv"
-    ]
-
-    # Executes the pipeline cleanly without emitting console log pollution
-    harmonized_results = (
-        run_pipeline(
-            uploaded_files
-        )
-    )
+    return {
+        "harmonized_outputs": harmonized_outputs,
+        "datasets": datasets,
+        "mappings": {
+            dataset_name: dataset_info.get("mapping", {})
+            for dataset_name, dataset_info in datasets.items()
+        },
+        "reasonings": {
+            dataset_name: dataset_info.get("reasoning", {})
+            for dataset_name, dataset_info in datasets.items()
+        }
+    }

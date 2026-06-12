@@ -57,6 +57,8 @@ def init_database():
             harmonized_filename TEXT,
             harmonized_path TEXT,
             harmonized_size INTEGER,
+            report_filename TEXT,
+            report_path TEXT,
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
             FOREIGN KEY (upload_id_1) REFERENCES upload_history(upload_id),
             FOREIGN KEY (upload_id_2) REFERENCES upload_history(upload_id)

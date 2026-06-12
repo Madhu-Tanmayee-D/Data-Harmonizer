@@ -81,6 +81,7 @@ def semantic_column_mapping(
         )
 
     mapping_results = {}
+    mapping_reasoning = {}
     columns_to_evaluate = {}
 
     # ------------------------------------------------------------
@@ -93,6 +94,7 @@ def semantic_column_mapping(
 
         if dataset_col in RULE_BASED_MAPPING:
             mapping_results[dataset_col] = RULE_BASED_MAPPING[dataset_col]
+            mapping_reasoning[dataset_col] = "Matched via Rule-Based System"
             continue
 
         columns_to_evaluate[dataset_col] = description
@@ -194,6 +196,8 @@ def semantic_column_mapping(
 
         parsed_mapping = json.loads(llm_output)
         mapping_results.update(parsed_mapping)
+        for col in parsed_mapping.keys():
+            mapping_reasoning[col] = "Mapped via Cloud LLM"
         print("[DEBUG] Cloud LLM responded successfully!")
 
     except requests.exceptions.Timeout:
@@ -204,11 +208,13 @@ def semantic_column_mapping(
 
     except Exception as e:
         print(f"\n[WARNING] Cloud LLM connection error: {str(e)}. Falling back to UNKNOWN.")
+        reasoning_results = {col: "Connection error: Fallback to UNKNOWN" for col in columns_to_evaluate}
         for col in columns_to_evaluate.keys():
             if col not in mapping_results:
                 mapping_results[col] = "UNKNOWN"
+        return {"mapping": mapping_results, "reasoning": reasoning_results}
 
-    return mapping_results
+    return {"mapping": mapping_results, "reasoning": mapping_reasoning}
 
 
 from harmonization import (
@@ -231,27 +237,20 @@ def run_semantic_mapping(
     )
 
     all_mappings = {}
+    all_reasonings = {}
 
     for (
         dataset_name,
         dataset_info
     ) in datasets.items():
 
-        mapping = (
-            semantic_column_mapping(
-                dataset_info[
-                    "schema"
-                ],
-                template_columns,
-                dataset_info[
-                    "sample_rows"
-                ]
-            )
+        result = semantic_column_mapping(
+            dataset_info["schema"],
+            template_columns,
+            dataset_info["sample_rows"]
         )
 
-        all_mappings[
-            dataset_name
-        ] = mapping
+        all_mappings[dataset_name] = result["mapping"]
 
     template_schema = list(
         template_columns.keys()
