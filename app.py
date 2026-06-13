@@ -848,6 +848,14 @@ def render_landing_page():
 def render_about_page():
     """Render the About page for the app."""
 
+    st.markdown("""
+        <style>
+        .block-container {
+            padding-top: 2rem !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+    
     import base64
     from pathlib import Path
 
@@ -856,12 +864,12 @@ def render_about_page():
             return base64.b64encode(img.read()).decode()
 
     logo_base64 = get_base64_image(LOGO_PATH)
-    
+
     st.markdown(f"""
         <div style="
             display: flex;
             justify-content: center;
-            margin-top: 1.2rem;
+            margin-top: 0rem;
             margin-bottom: 0.4rem;
         ">
             <img src="data:image/png;base64,{logo_base64}"
