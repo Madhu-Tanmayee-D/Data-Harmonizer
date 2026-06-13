@@ -847,6 +847,27 @@ def render_landing_page():
 
 def render_about_page():
     """Render the About page for the app."""
+
+    import base64
+    from pathlib import Path
+
+    def get_base64_image(image_path):
+        with open(image_path, "rb") as img:
+            return base64.b64encode(img.read()).decode()
+
+    logo_base64 = get_base64_image(LOGO_PATH)
+    
+    st.markdown(f"""
+        <div style="
+            display: flex;
+            justify-content: center;
+            margin-top: 1.2rem;
+            margin-bottom: 0.4rem;
+        ">
+            <img src="data:image/png;base64,{logo_base64}"
+                style="width:80px; height:80px; object-fit:contain;">
+        </div>
+    """, unsafe_allow_html=True)
     st.markdown(
         """
         <div style="font-size: 2.5rem;">
@@ -855,6 +876,7 @@ def render_about_page():
         """,
         unsafe_allow_html=True
     )
+
     st.markdown("""
         <div class='info-box'>
             <p style='margin:0 0 0.9rem; font-size:1rem; color:#e8f5e9;'><strong>✨ Syncify</strong> is your data sidekick! It brings multiple datasets together into one sparkly, harmonized output. No more tedious column matching — let Syncify handle the heavy lifting so you can focus on insights!</p>
