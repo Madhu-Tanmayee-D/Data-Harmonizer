@@ -46,13 +46,21 @@ st.set_page_config(
 # Navigation is handled via the top navigation bar for logged-in users
 # and via query parameters ("?page=...") to keep URL-driven routing.
 
-def render_logo(size=120):
-    # Increasing the side column weights (e.g., 4, 2, 4)
-    # creates more padding on the sides to force the middle to be centered.
-    c1, c2, c3 = st.columns([4, 2, 3])
-    with c2:
-        if LOGO_PATH.exists():
+def render_logo(size=120, centered=True):
+    """Render app logo."""
+    
+    if not LOGO_PATH.exists():
+        return
+
+    # Default: centered logo (existing behavior)
+    if centered:
+        c1, c2, c3 = st.columns([4, 2, 3])
+        with c2:
             st.image(str(LOGO_PATH), width=size)
+
+    # Inline logo (for title row)
+    else:
+        st.image(str(LOGO_PATH), width=size)
 
 import streamlit.components.v1 as components
 
@@ -721,93 +729,119 @@ def render_auth_page():
                 st.rerun()
 
 
-def render_landing_page():
-    """Render the opening landing page before login/signup."""
+def render_landing_page(): 
+    """Render the opening landing page before login/signup.""" 
     st.markdown("""
-        <style>
+        <style> 
             .landing-container {
-                        max-width: 860px;
-                        margin: 0 auto;
-                        padding: 3.5rem 1.25rem 2.5rem;
-                        text-align: center;
-                    }
-                    .landing-title {
-                        font-size: 3.2rem;
-                        color: #ffd6e8;
-                        margin: 0 0 0.6rem;
-                        letter-spacing: 0.02em;
-                        font-family: 'Quicksand', 'Inter', sans-serif !important;
-                        font-weight: 500;
-                        background: linear-gradient(90deg,#7ce7d9,#9b8cff,#ff6fa3);
-                        -webkit-background-clip: text;
-                        -webkit-text-fill-color: transparent;
-                    }
-                    .landing-tagline {
-                        color: #f1f5f9;
-                        font-size: 1.08rem;
-                        line-height: 1.7;
-                        margin: 0 auto 1rem;
-                        max-width: 680px;
-                        font-family: 'Quicksand', 'Inter', sans-serif !important;
-                        font-weight: 300;
-                    }
-                    /* small about link fixed to top-right on the landing page only */
-                    .landing-about-button {
-                        display: inline-flex;
-                        align-items: center;
-                        justify-content: center;
-                        margin: 0.6rem auto 0.6rem;
-                        padding: 0.85rem 1.4rem;
-                        border-radius: 999px;
-                        background: linear-gradient(90deg,#7ce7d9 0%, #ff9ec4 50%, #9b8cff 100%);
-                        color: #061018;
-                        text-decoration: none;
-                        font-size: 1.05rem;
-                        font-weight: 600;
-                        box-shadow: 0 14px 30px rgba(155,140,255,0.12);
-                        transition: transform 0.15s ease, opacity 0.15s ease;
-                        border: 1px solid rgba(255,255,255,0.04);
-                    }
-                    .landing-about-button:hover { transform: translateY(-2px); opacity: 0.98; }
-                    .landing-links {
-                        display: inline-flex;
-                        gap: 12px;
-                        flex-wrap: wrap;
-                        justify-content: center;
-                        margin-top: 0.6rem;
-                    }
-                    .landing-link {
-                        color: #021112;
-                        border: 1px solid rgba(255,255,255,0.06);
-                        padding: 0.85rem 1rem;
-                        border-radius: 999px;
-                        text-decoration: none;
-                        font-size: 0.95rem;
-                        font-weight: 600;
-                        transition: all 0.15s ease;
-                        background: linear-gradient(90deg,#5bb8aa 0%, #7a9ec9 50%, #8b78b8 100%);
-                        box-shadow: 0 10px 24px rgba(91,184,170,0.08);
-                    }
-                    .landing-link:hover {
-                        background-color: #121018;
-                        border-color: #7c3aed;
-                        color: #f8f4ff;
-                    }
-        </style>
-    """, unsafe_allow_html=True)
+                max-width: 860px; 
+                margin: 0 auto; 
+                padding: 3.5rem 1.25rem 2.5rem; 
+                text-align: center; 
+            } 
+            .landing-header {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 18px;
+                margin-bottom: 0.8rem;
+            }
 
-    render_logo(size=100)
-    st.markdown("""
-        <div class='landing-container'>
-            <div class='landing-title'>Syncify</div>
-            <div class='landing-tagline'>A smart dataset harmonization tool that aligns columns, merges data, and produces clean outputs for analysis.<br/>Fast, visual, and easy to use.</div>
-                <a class='landing-about-button' href='?action=about' target='_self'>About Syncify</a>
-            <div style='height:8px;'></div>
-            <div class='landing-links'>
-                <a class='landing-link' href='?action=signup' target='_self'>Don't have an account? Sign in!</a>
-                <a class='landing-link' href='?action=login' target='_self'>Already have an account? Login!</a>
-            </div>
-        </div>
+            .landing-logo img {
+                width: 90px;
+                height: 90px;
+                object-fit: contain;
+            }
+            .landing-title { 
+                font-size: 3.2rem; 
+                color: #ffd6e8; 
+                margin: 0 0 0.6rem; 
+                letter-spacing: 0.02em; 
+                font-family: 'Quicksand', 'Inter', sans-serif !important; 
+                font-weight: 500; 
+                background: linear-gradient(90deg,#7ce7d9,#9b8cff,#ff6fa3); 
+                -webkit-background-clip: text; 
+                -webkit-text-fill-color: transparent; 
+            } 
+            .landing-tagline { 
+                color: #f1f5f9; 
+                font-size: 1.08rem; 
+                line-height: 1.7; 
+                margin: 0 auto 1rem; 
+                max-width: 680px; 
+                font-family: 'Quicksand', 'Inter', sans-serif !important; 
+                font-weight: 300; 
+            } /* small about link fixed to top-right on the landing page only */ 
+            .landing-about-button { 
+                display: inline-flex; 
+                align-items: center; 
+                justify-content: center; 
+                margin: 0.6rem auto 0.6rem; 
+                padding: 0.85rem 1.4rem; 
+                border-radius: 999px; background: 
+                linear-gradient(90deg,#7ce7d9 0%, #ff9ec4 50%, #9b8cff 100%); 
+                color: #061018; 
+                text-decoration: none; 
+                font-size: 1.05rem; 
+                font-weight: 600; 
+                box-shadow: 0 14px 30px rgba(155,140,255,0.12); 
+                transition: transform 0.15s ease, opacity 0.15s ease; 
+                border: 1px solid rgba(255,255,255,0.04); 
+            } 
+            .landing-about-button:hover { 
+                transform: translateY(-2px); opacity: 0.98; 
+            } 
+            .landing-links { 
+                display: inline-flex; 
+                gap: 12px; 
+                flex-wrap: wrap; 
+                justify-content: center; 
+                margin-top: 0.6rem; 
+            } 
+            .landing-link { 
+                color: #021112; 
+                border: 1px solid rgba(255,255,255,0.06); 
+                padding: 0.85rem 1rem; 
+                border-radius: 999px; 
+                text-decoration: none; 
+                font-size: 0.95rem; 
+                font-weight: 600; 
+                transition: all 0.15s ease; 
+                background: linear-gradient(90deg,#5bb8aa 0%, #7a9ec9 50%, #8b78b8 100%); 
+                box-shadow: 0 10px 24px rgba(91,184,170,0.08); 
+            } 
+            .landing-link:hover { 
+                background-color: #121018; 
+                border-color: #7c3aed; 
+                color: #f8f4ff; } 
+        </style> 
+    """, unsafe_allow_html=True) 
+     
+    import base64
+    from pathlib import Path
+
+    def get_base64_image(image_path):
+        with open(image_path, "rb") as img:
+            return base64.b64encode(img.read()).decode()
+
+    logo_base64 = get_base64_image(LOGO_PATH)
+
+    st.markdown(f""" 
+        <div class='landing-container'> 
+            <div class='landing-header'>
+                <div class='landing-logo'>
+                    <img src="data:image/png;base64,{logo_base64}" />
+                </div>
+                <div class='landing-title'>Syncify</div>
+            </div> 
+            <div class='landing-tagline'>A smart dataset harmonization tool that aligns columns, merges data, and produces clean outputs for analysis.<br/>Fast, visual, and easy to use.</div> 
+                <a class='landing-about-button' href='?action=about' target='_self'>About Syncify</a> 
+            <div style='height:8px;'></div> 
+            <div class='landing-links'> 
+                <a class='landing-link' href='?action=signup' target='_self'>Don't have an account? Sign in!</a> 
+                <a class='landing-link' href='?action=login' target='_self'>Already have an account? Login!</a> 
+            </div> 
+        </div> 
     """, unsafe_allow_html=True)
 
 
@@ -1525,7 +1559,7 @@ def render_settings():
 
     # Button wrapped in a div to force left-alignment
     st.markdown('<div class="left-align-btn">', unsafe_allow_html=True)
-    if st.button("🗑️ Delete My Account"):
+    if st.button("Delete My Account"):
         st.session_state.show_delete_confirm = True
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
