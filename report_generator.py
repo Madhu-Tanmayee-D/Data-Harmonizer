@@ -108,6 +108,78 @@ def _save_bar_chart(labels, values, title, output_path, ylabel="Value"):
     plt.savefig(output_path)
     plt.close()
 
+def _save_histogram(series, title, output_path):
+    plt.figure(figsize=(8, 4))
+    plt.hist(series.dropna(), bins=20)
+    plt.title(title)
+    plt.xlabel("Value")
+    plt.ylabel("Frequency")
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+
+
+def _generate_distribution_analysis(df, reports_dir, timestamp):
+    chart_paths = []
+    numeric_summary = []
+    categorical_summary = []
+
+    numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+    categorical_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+
+    # ---------- Numeric Analysis ----------
+    for col in numeric_cols[:3]:  # limit to avoid huge reports
+        series = df[col].dropna()
+
+        if len(series) == 0:
+            continue
+
+        numeric_summary.append([
+            col,
+            round(series.mean(), 2),
+            round(series.median(), 2),
+            round(series.std(), 2) if len(series) > 1 else 0,
+            round(series.min(), 2),
+            round(series.max(), 2),
+        ])
+
+        hist_path = str(reports_dir / f"{col}_hist_{timestamp}.png")
+
+        _save_histogram(
+            series,
+            f"Distribution of {col}",
+            hist_path,
+        )
+
+        chart_paths.append(hist_path)
+
+    # ---------- Categorical Analysis ----------
+    for col in categorical_cols[:3]:
+        value_counts = df[col].value_counts().head(5)
+
+        if value_counts.empty:
+            continue
+
+        for category, count in value_counts.items():
+            categorical_summary.append([
+                col,
+                str(category),
+                int(count)
+            ])
+
+        cat_chart = str(reports_dir / f"{col}_distribution_{timestamp}.png")
+
+        _save_bar_chart(
+            value_counts.index.astype(str).tolist(),
+            value_counts.values.tolist(),
+            f"Top Values in {col}",
+            cat_chart,
+            ylabel="Frequency"
+        )
+
+        chart_paths.append(cat_chart)
+
+    return numeric_summary, categorical_summary, chart_paths
 
 def generate_report(
     df,
@@ -149,6 +221,14 @@ def generate_report(
 
     chart_paths = []
     missing = df.isnull().sum()
+    # Value Distribution Analysis
+    numeric_summary, categorical_summary, distribution_charts = (
+        _generate_distribution_analysis(
+            df,
+            reports_dir,
+            timestamp
+        )
+    )
     missing_to_plot = missing[missing > 0].sort_values(ascending=False).head(10)
     if missing_to_plot.empty:
         missing_to_plot = pd.Series({"No missing values": 0})
@@ -302,10 +382,48 @@ def generate_report(
             ["Execution Time", f"{processing_seconds:.2f} seconds" if processing_seconds is not None else "N/A"],
             ["API Calls Used", len(datasets)],
         ],
+    )   
+
+    doc.add_heading("Value Distribution Analysis", level=1)
+
+    doc.add_paragraph(
+        "This section summarizes the statistical and categorical value "
+        "distribution of the harmonized dataset to assess data spread, "
+        "dominant categories, and consistency after harmonization."
     )
 
+    # Numerical Summary
+    doc.add_heading("Numerical Column Statistics", level=2)
+
+    if numeric_summary:
+        _add_table(
+            doc,
+            ["Column", "Mean", "Median", "Std Dev", "Min", "Max"],
+            numeric_summary,
+        )
+    else:
+        doc.add_paragraph("No numerical columns available.")
+
+    # Categorical Summary
+    doc.add_heading("Categorical Value Distribution", level=2)
+
+    if categorical_summary:
+        _add_table(
+            doc,
+            ["Column", "Value", "Frequency"],
+            categorical_summary,
+        )
+    else:
+        doc.add_paragraph("No categorical columns available.")
+    
     doc.add_heading("Visual Analysis", level=1)
+
+    # Existing charts
     for path in chart_paths:
+        doc.add_picture(path, width=Inches(5.5))
+
+    # Distribution charts
+    for path in distribution_charts:
         doc.add_picture(path, width=Inches(5.5))
 
     doc.add_heading("Errors and Warnings", level=1)
