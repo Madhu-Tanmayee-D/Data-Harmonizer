@@ -43,6 +43,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# Load Streamlit secrets after page configuration is set
+from semantic_mapping import _load_st_secrets
+_load_st_secrets()
+
 # Navigation is handled via the top navigation bar for logged-in users
 # and via query parameters ("?page=...") to keep URL-driven routing.
 
@@ -838,7 +842,7 @@ def render_landing_page():
                 <a class='landing-about-button' href='?action=about' target='_self'>About Syncify</a> 
             <div style='height:8px;'></div> 
             <div class='landing-links'> 
-                <a class='landing-link' href='?action=signup' target='_self'>Don't have an account? Sign in!</a> 
+                <a class='landing-link' href='?action=signup' target='_self'>Don't have an account? Sign up!</a> 
                 <a class='landing-link' href='?action=login' target='_self'>Already have an account? Login!</a> 
             </div> 
         </div> 

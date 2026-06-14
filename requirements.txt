@@ -10,13 +10,12 @@ plotly==5.17.0
 # Backend & ML/NLP
 scikit-learn==1.3.2
 
-# The following heavy packages are commented out for cloud deployment
-# They require native builds and often fail on Streamlit Cloud.
-# If you need local model inference, uncomment and install them locally.
-# torch==2.0.1
-# sentence-transformers==2.2.2
-# transformers==4.35.2
-# huggingface-hub==0.19.4
+# The following packages are required for embedding-based semantic mapping
+# Use sentence-transformers to produce 384-dimensional sentence embeddings.
+torch==2.0.1
+sentence-transformers==2.2.2
+transformers==4.35.2
+huggingface-hub==0.19.4
 
 # Database
 # SQLite is included with Python, so no external package is required.

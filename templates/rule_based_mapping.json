@@ -33,5 +33,15 @@
     "country": "location",
     "city": "location",
     "branch": "location",
-    "hospital": "location"
+    "hospital": "location",
+
+    "customer_id": "entity_id",
+    "client_code": "entity_id",
+    "customer_name": "entity_name",
+    "client_full_name": "entity_name",
+    "order_amount": "numeric_value",
+    "invoice_total": "numeric_value",
+    "order_date": "timestamp",
+    "date_of_purchase": "timestamp",
+    "region": "location"
 }
