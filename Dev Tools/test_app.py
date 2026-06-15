@@ -48,25 +48,28 @@ class TestAuthentication:
 
     def test_user_registration(self):
         """Test user registration"""
-        success, message = register_user(
+        success, user_id, message = register_user(
             "testuser",
             "test@example.com",
             "password123"
         )
         
         assert success
+        assert user_id is not None
+        assert user_id > 0
         assert "registered" in message.lower()
 
     def test_duplicate_username(self):
         """Test duplicate username registration"""
         register_user("testuser", "test@example.com", "password123")
-        success, message = register_user(
+        success, user_id, message = register_user(
             "testuser",
             "other@example.com",
             "password123"
         )
         
         assert not success
+        assert user_id is None
         assert "exists" in message.lower()
 
     def test_login_success(self):
@@ -88,24 +91,26 @@ class TestAuthentication:
 
     def test_short_password(self):
         """Test short password validation"""
-        success, message = register_user(
+        success, user_id, message = register_user(
             "testuser",
             "test@example.com",
             "short"
         )
         
         assert not success
+        assert user_id is None
         assert "password" in message.lower() or "characters" in message.lower()
 
     def test_short_username(self):
         """Test short username validation"""
-        success, message = register_user(
+        success, user_id, message = register_user(
             "ab",
             "test@example.com",
             "password123"
         )
         
         assert not success
+        assert user_id is None
 
 
 class TestDatabase:

@@ -45,7 +45,7 @@ def verify_password(stored_hash, provided_password):
 def register_user(username, email, password):
     """
     Register a new user.
-    Returns: (success: bool, message: str)
+    Returns: (success: bool, user_id: int or None, message: str)
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -55,15 +55,15 @@ def register_user(username, email, password):
         cursor.execute('SELECT user_id FROM users WHERE username = ? OR email = ?', 
                       (username, email))
         if cursor.fetchone():
-            return False, "Username or email already exists"
+            return False, None, "Username or email already exists"
         
         # Validate inputs
         if len(username) < 3:
-            return False, "Username must be at least 3 characters"
+            return False, None, "Username must be at least 3 characters"
         if len(password) < 6:
-            return False, "Password must be at least 6 characters"
+            return False, None, "Password must be at least 6 characters"
         if '@' not in email:
-            return False, "Invalid email format"
+            return False, None, "Invalid email format"
         
         # Hash password and insert user
         password_hash = hash_password(password)
@@ -73,10 +73,10 @@ def register_user(username, email, password):
         ''', (username, email, password_hash))
         
         conn.commit()
-        return True, "User registered successfully"
+        return True, cursor.lastrowid, "User registered successfully"
         
     except Exception as e:
-        return False, f"Registration error: {str(e)}"
+        return False, None, f"Registration error: {str(e)}"
     finally:
         close_db_connection(conn)
 

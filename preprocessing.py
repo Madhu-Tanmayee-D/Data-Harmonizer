@@ -69,8 +69,7 @@ def process_dataset(
 
             dataframe[column] = pd.to_datetime(
                 dataframe[column],
-                errors="coerce",
-                infer_datetime_format=True
+                errors="coerce"
             )
 
     return dataframe

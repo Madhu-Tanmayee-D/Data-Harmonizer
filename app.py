@@ -549,6 +549,8 @@ if 'user_id' not in st.session_state:
     st.session_state.user_id = None
 if 'username' not in st.session_state:
     st.session_state.username = None
+if 'email' not in st.session_state:
+    st.session_state.email = None
 if 'auth_view' not in st.session_state:
     st.session_state.auth_view = None  # None means show landing page
 
@@ -586,6 +588,30 @@ def resolve_existing_path(file_path):
 def read_download_bytes(file_path):
     path = resolve_existing_path(file_path)
     return path.read_bytes() if path else None
+
+
+def _parse_timestamp(raw_date):
+    if raw_date is None:
+        return None
+    if isinstance(raw_date, datetime):
+        return raw_date
+    raw_str = str(raw_date).strip()
+    if not raw_str:
+        return None
+    for fmt in [
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S.%f",
+    ]:
+        try:
+            return datetime.strptime(raw_str, fmt)
+        except Exception:
+            continue
+    try:
+        return datetime.fromisoformat(raw_str)
+    except Exception:
+        return None
 
 
 def _load_preview_dataframe(uploaded_file):
@@ -644,6 +670,7 @@ def render_auth_page():
                     if success:
                         st.session_state.user_id = user_id
                         st.session_state.username = username
+                        st.session_state.email = get_user_info(user_id).get('email') if get_user_info(user_id) else None
                         st.session_state.logged_in = True
                         st.session_state.current_page = 'home'
                         # Mark as a returning login (not a fresh signup)
@@ -706,11 +733,11 @@ def render_auth_page():
                 elif password != confirm_password:
                     st.error("Passwords don't match")
                 else:
-                    success, message = register_user(username, email, password)
+                    success, user_id, message = register_user(username, email, password)
                     if success:
-                        # Instead of fetching a DB ID, we use the username as the unique identifier
-                        st.session_state.user_id = username 
+                        st.session_state.user_id = user_id
                         st.session_state.username = username
+                        st.session_state.email = email
                         st.session_state.logged_in = True
                         st.session_state.current_page = 'home'
                         
@@ -1086,10 +1113,11 @@ def render_home():
             date_raw = job.get('completion_timestamp') or job.get('process_timestamp')
             date_label = ''
             if date_raw:
-                try:
+                parsed_date = _parse_timestamp(date_raw)
+                if parsed_date:
+                    date_label = parsed_date.strftime('%Y-%m-%d')
+                else:
                     date_label = str(date_raw).split(' ', 1)[0]
-                except Exception:
-                    date_label = str(date_raw)
             
             harmonized_name = job.get('harmonized_filename') or 'Unnamed Harmonized Dataset'
             report_name = job.get('report_filename') or 'No report'
@@ -1312,7 +1340,7 @@ def render_dashboard():
                         use_container_width=True, 
                         height=180
                     )
-                    
+
                     # 5. Finalize Records and Cleanup
                     file_size_bytes = os.path.getsize(output_path)
 
@@ -1458,15 +1486,14 @@ def render_history():
                 raw_date = job.get("completion_timestamp") or job.get("process_timestamp")
                 
                 if raw_date and raw_date != "N/A":
-                    # If your date_str is a single string like "2026-05-29 12:46:09"
-                    # We can split it into Date and Time (assuming a space separator)
-                    try:
-                        date_part, time_part = str(raw_date).split(' ', 1)
-                    except ValueError:
-                        date_part, time_part = str(raw_date), ""
-
-                    # Ensure we only show HH:MM:SS (the first 8 characters)
-                    formatted_time = time_part[:8]
+                    parsed_date = _parse_timestamp(raw_date)
+                    if parsed_date:
+                        date_part = parsed_date.strftime("%Y-%m-%d")
+                        formatted_time = parsed_date.strftime("%H:%M:%S")
+                    else:
+                        raw_str = str(raw_date)
+                        date_part = raw_str.split(' ', 1)[0]
+                        formatted_time = raw_str.split(' ', 1)[1][:8] if ' ' in raw_str else ''
 
                     st.markdown(f"""
                         <div style="margin-top: 5px;">
@@ -1607,8 +1634,8 @@ def render_settings():
     
     # Display basic account info at the top of the Profile page
     user_info = get_user_info(st.session_state.user_id)
-    username_display = st.session_state.get('username', 'User')
-    email_display = user_info.get('email', 'N/A') if user_info else 'N/A'
+    username_display = st.session_state.get('username') or (user_info.get('username') if user_info else 'User')
+    email_display = st.session_state.get('email') or (user_info.get('email') if user_info else 'N/A')
     created_display = None
     if user_info:
         created_at = user_info.get('created_at')
@@ -1623,8 +1650,8 @@ def render_settings():
         user_info = get_user_info(st.session_state.user_id)
         email_val = user_info.get("email", "") if user_info else ""
         
-        new_username = st.text_input("New Username", value=st.session_state.username)
-        new_email = st.text_input("New Email", value=email_val)
+        new_username = st.text_input("New Username", value=st.session_state.username or "", key="profile_username")
+        new_email = st.text_input("New Email", value=st.session_state.email or email_val or "", key="profile_email")
         
         st.markdown("### Change Password")
         new_password = st.text_input("New Password", type="password")
@@ -1637,16 +1664,16 @@ def render_settings():
             elif new_password and new_password != confirm_password:
                 st.error("Passwords don't match!")
             else:
-                # Prepare data
-                # Note: Pass None or empty string if user didn't type a new password
                 password_to_update = new_password if new_password else None
-                
-                # Call your backend update function
-                # Make sure your update_user_info function is updated to accept 'password'
                 if update_user_info(st.session_state.user_id, new_username, new_email, password_to_update):
+                    # Refresh profile information immediately after update
+                    user_info = get_user_info(st.session_state.user_id)
                     st.session_state.username = new_username
+                    st.session_state.email = new_email
+                    st.session_state.profile_username = new_username
+                    st.session_state.profile_email = new_email
                     st.success("Profile updated successfully!")
-                    st.rerun()
+                    st.experimental_rerun()
                 else:
                     st.error("Failed to update profile.")
 

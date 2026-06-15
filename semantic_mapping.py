@@ -4,10 +4,7 @@ import pandas as pd
 import requests  # Used to communicate with a cloud LLM API
 from sklearn.metrics.pairwise import cosine_similarity
 
-try:
-    from sentence_transformers import SentenceTransformer
-except Exception:
-    SentenceTransformer = None
+SentenceTransformer = None
 
 try:
     import streamlit as st
@@ -151,8 +148,11 @@ def _build_column_text(column_name, column_info, sample_values=None):
 def _get_embedding_model():
     global _embedding_model
     if _embedding_model is None:
-        if SentenceTransformer is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except Exception:
             raise RuntimeError("sentence-transformers is required for embedding-based semantic mapping.")
+
         _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
     return _embedding_model
 
