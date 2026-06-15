@@ -199,7 +199,8 @@ def generate_report(
     reports_dir = BASE_DIR / "outputs" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_timestamp = datetime.now()
+    timestamp = report_timestamp.strftime("%Y%m%d_%H%M%S")
     if report_filename:
         safe_report_filename = report_filename
     elif output_dataset_name:
@@ -253,22 +254,31 @@ def generate_report(
     )
     chart_paths.append(dtype_chart)
 
-    shape_chart = str(reports_dir / f"shape_{timestamp}.png")
-    _save_bar_chart(["Rows", "Columns"], [df.shape[0], df.shape[1]], "Dataset Shape Summary", shape_chart)
-    chart_paths.append(shape_chart)
-
     if mapping_rows:
-        confidence_chart = str(reports_dir / f"confidence_{timestamp}.png")
-        confidence_labels = [f"{row[0]} -> {row[2]}"[:35] for row in mapping_rows[:10]]
-        confidence_chart_values = [int(str(row[4]).replace("%", "")) for row in mapping_rows[:10]]
+        matched_count = sum(1 for row in mapping_rows if row[2] != "UNKNOWN" and row[3] == "Semantic Match")
+        resolved_count = sum(1 for row in mapping_rows if row[2] != "UNKNOWN" and row[3] != "Semantic Match")
+        unknown_count = sum(1 for row in mapping_rows if row[2] == "UNKNOWN")
+
+        success_summary_chart = str(reports_dir / f"success_summary_{timestamp}.png")
         _save_bar_chart(
-            confidence_labels,
-            confidence_chart_values,
-            "Column Mapping Confidence",
-            confidence_chart,
-            "Confidence %",
+            ["Matched", "Resolved", "Unknown", "Avg Confidence"],
+            [matched_count, resolved_count, unknown_count, average_confidence],
+            "Harmonization Success Summary",
+            success_summary_chart,
+            "Count / Confidence"
         )
-        chart_paths.append(confidence_chart)
+        chart_paths.append(success_summary_chart)
+
+        confidence_counts = pd.Series(confidence_values).value_counts().sort_index()
+        confidence_dist_chart = str(reports_dir / f"confidence_distribution_{timestamp}.png")
+        _save_bar_chart(
+            [f"{int(label)}%" for label in confidence_counts.index.tolist()],
+            confidence_counts.values.tolist(),
+            "Mapping Confidence Distribution",
+            confidence_dist_chart,
+            ylabel="Mappings"
+        )
+        chart_paths.append(confidence_dist_chart)
 
     doc = Document()
     doc.styles["Normal"].font.name = "Calibri"
@@ -276,7 +286,7 @@ def generate_report(
 
     title = doc.add_heading("DATA HARMONIZATION REPORT", level=0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    generated = doc.add_paragraph("Generated On: " + datetime.now().strftime("%d %B %Y, %I:%M %p"))
+    generated = doc.add_paragraph("Generated On: " + report_timestamp.strftime("%d %B %Y, %H:%M:%S"))
     generated.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     dataset_names = list(datasets.keys())
@@ -310,15 +320,26 @@ def generate_report(
 
     doc.add_heading("Dataset Overview", level=1)
     overview_rows = []
+    input_dfs = []
     for index, original_name in enumerate([file1_name, file2_name]):
         dataset_info = datasets.get(dataset_names[index], {}) if index < len(dataset_names) else {}
         source_df = dataset_info.get("dataframe")
         if source_df is not None:
+            input_dfs.append(source_df)
             total_cells = source_df.shape[0] * source_df.shape[1]
             missing_percent = round((source_df.isnull().sum().sum() / total_cells) * 100, 2) if total_cells else 0
             file_format = os.path.splitext(original_name)[1].lstrip(".").upper() or "N/A"
             overview_rows.append([original_name, source_df.shape[0], source_df.shape[1], f"{missing_percent}%", file_format])
     _add_table(doc, ["File Name", "Rows", "Columns", "Missing Values", "Format"], overview_rows)
+
+    shape_summary_rows = []
+    for index, original_name in enumerate([file1_name, file2_name]):
+        dataset_info = datasets.get(dataset_names[index], {}) if index < len(dataset_names) else {}
+        source_df = dataset_info.get("dataframe")
+        if source_df is not None:
+            shape_summary_rows.append([original_name, source_df.shape[0], source_df.shape[1]])
+    shape_summary_rows.append([output_dataset_name or "Harmonized Output", df.shape[0], df.shape[1]])
+    _add_table(doc, ["Dataset", "Rows", "Columns"], shape_summary_rows)
 
     doc.add_heading("Column Preview", level=2)
     for index, original_name in enumerate([file1_name, file2_name]):
@@ -356,17 +377,32 @@ def generate_report(
         doc.add_paragraph(item, style="List Bullet")
 
     doc.add_heading("Before vs After Snapshot", level=1)
+    combined_input_rows = sum(source_df.shape[0] for source_df in input_dfs)
+    combined_input_columns = len(set(col for source_df in input_dfs for col in source_df.columns))
+    combined_input_missing = sum(int(source_df.isnull().sum().sum()) for source_df in input_dfs)
+    after_missing = int(df.isnull().sum().sum())
+
+    _add_table(
+        doc,
+        ["Metric", "Before Harmonization", "After Harmonization"],
+        [
+            ["Total Rows", combined_input_rows, df.shape[0]],
+            ["Total Columns", combined_input_columns, df.shape[1]],
+            ["Missing Values", combined_input_missing, after_missing],
+        ]
+    )
+
     for index, original_name in enumerate([file1_name, file2_name]):
         dataset_info = datasets.get(dataset_names[index], {}) if index < len(dataset_names) else {}
         source_df = dataset_info.get("dataframe")
         doc.add_heading(f"Before Harmonization - {original_name}", level=2)
         if source_df is not None:
-            preview = source_df.head(3).fillna("")
-            _add_table(doc, list(preview.columns[:5]), preview.iloc[:, :5].values.tolist())
+            preview = source_df.head(5).fillna("")
+            _add_table(doc, list(preview.columns[:min(10, len(preview.columns))]), preview.iloc[:, :min(10, len(preview.columns))].values.tolist())
 
     doc.add_heading("After Harmonization", level=2)
-    after_preview = df.head(5).fillna("")
-    _add_table(doc, list(after_preview.columns[:6]), after_preview.iloc[:, :6].values.tolist())
+    after_preview = df.head(10).fillna("")
+    _add_table(doc, list(after_preview.columns[:min(10, len(after_preview.columns))]), after_preview.iloc[:, :min(10, len(after_preview.columns))].values.tolist())
 
     doc.add_heading("Processing Statistics Dashboard", level=1)
     total_columns_compared = sum(len(mapping) for mapping in mappings.values())

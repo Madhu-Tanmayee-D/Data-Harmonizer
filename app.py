@@ -588,6 +588,22 @@ def read_download_bytes(file_path):
     return path.read_bytes() if path else None
 
 
+def _load_preview_dataframe(uploaded_file):
+    try:
+        uploaded_file.seek(0)
+        extension = Path(uploaded_file.name).suffix.lower()
+        if extension == ".csv":
+            df = pd.read_csv(uploaded_file, low_memory=False)
+        elif extension in [".xlsx", ".xls"]:
+            df = pd.read_excel(uploaded_file)
+        else:
+            return None
+        uploaded_file.seek(0)
+        return df
+    except Exception:
+        return None
+
+
 def render_auth_page():
     """Render unified seamless login and signup views cleanly styled."""
     st.markdown("""
@@ -1067,13 +1083,23 @@ def render_home():
         recents = processing_history[:3]
         cols = st.columns(len(recents))
         for col, job in zip(cols, recents):
-            name = job.get('harmonized_filename') or 'Unnamed Harmonized Dataset'
-            report = job.get('report_filename') or 'No report'
+            date_raw = job.get('completion_timestamp') or job.get('process_timestamp')
+            date_label = ''
+            if date_raw:
+                try:
+                    date_label = str(date_raw).split(' ', 1)[0]
+                except Exception:
+                    date_label = str(date_raw)
+            
+            harmonized_name = job.get('harmonized_filename') or 'Unnamed Harmonized Dataset'
+            report_name = job.get('report_filename') or 'No report'
+            
             with col:
                 st.markdown(f"""
                     <div style='border:1px solid #222226;padding:12px;border-radius:8px;width:100%;margin-top:0.6rem;box-sizing:border-box;word-break:break-word;'>
-                        <div style='font-weight:600;color:#e8f5e9'>{name}</div>
-                        <div style='color:#e8f5e9;margin-top:6px'>{report}</div>
+                        <div style='font-size:0.75rem;color:#94a3b8;margin-bottom:4px;'>Date: {date_label}</div>
+                        <div style='font-weight:600;color:#e8f5e9'>{harmonized_name}</div>
+                        <div style='color:#e8f5e9;margin-top:8px'>{report_name}</div>
                     </div>
                 """, unsafe_allow_html=True)
     else:
@@ -1128,17 +1154,44 @@ def render_dashboard():
     st.markdown("<div style='margin-top:4rem;'></div>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**Dataset 1**")
+        st.markdown("<div style='margin-bottom:0.8rem; font-weight:bold;'>Dataset 1</div>", unsafe_allow_html=True)
         # The CSS we added earlier will automatically style this uploader
         file1 = st.file_uploader("Choose first dataset", key="file1", type=['csv', 'xlsx', 'xls'])
     with col2:
-        st.markdown("**Dataset 2**")
+        st.markdown("<div style='margin-bottom:0.8rem; font-weight:bold;'>Dataset 2</div>", unsafe_allow_html=True)
         file2 = st.file_uploader("Choose second dataset", key="file2", type=['csv', 'xlsx', 'xls'])
 
     current_upload_signature = (
         (file1.name, file1.size) if file1 else None,
         (file2.name, file2.size) if file2 else None
     )
+
+    if file1 or file2:
+        st.markdown("<div style='margin-top:2.5rem;'></div>", unsafe_allow_html=True)
+        preview_col1, preview_col2 = st.columns(2)
+
+        with preview_col1:
+            if file1:
+                df_preview_1 = _load_preview_dataframe(file1)
+                if df_preview_1 is not None:
+                    st.markdown(f"<div style='font-weight:600;margin-bottom:0.4rem;'>Dataset 1: {file1.name}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='color:#94a3b8;margin-bottom:0.6rem;'>Rows: {df_preview_1.shape[0]} | Columns: {df_preview_1.shape[1]}</div>", unsafe_allow_html=True)
+                    # Reduced height to 150 (or your preferred size)
+                    st.dataframe(df_preview_1.head(5), use_container_width=True, height=150)
+                else:
+                    st.warning("Unable to preview Dataset 1.")
+
+        with preview_col2:
+            if file2:
+                df_preview_2 = _load_preview_dataframe(file2)
+                if df_preview_2 is not None:
+                    st.markdown(f"<div style='font-weight:600;margin-bottom:0.4rem;'>Dataset 2: {file2.name}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='color:#94a3b8;margin-bottom:0.6rem;'>Rows: {df_preview_2.shape[0]} | Columns: {df_preview_2.shape[1]}</div>", unsafe_allow_html=True)
+                    # Reduced height to 150 (or your preferred size)
+                    st.dataframe(df_preview_2.head(5), use_container_width=True, height=150)
+                else:
+                    st.warning("Unable to preview Dataset 2.")
+
     latest_result = st.session_state.get("latest_harmonization_result")
     if (
         latest_result
@@ -1246,6 +1299,20 @@ def render_dashboard():
                         processing_seconds=processing_seconds
                     )
 
+                    st.success("Harmonization complete!")
+                    
+                    # Prepare preview data from the processed dataframe
+                    preview_df = combined_df.head(20) # Showing top 20 rows
+                    st.markdown("<div style='margin-top:1.5rem;'></div>", unsafe_allow_html=True)
+                    st.subheader("Harmonized Dataset Preview")
+                    st.markdown(f"Rows: {combined_df.shape[0]} | Columns: {combined_df.shape[1]}")
+                    
+                    st.dataframe(
+                        preview_df, 
+                        use_container_width=True, 
+                        height=180
+                    )
+                    
                     # 5. Finalize Records and Cleanup
                     file_size_bytes = os.path.getsize(output_path)
 
@@ -1279,7 +1346,10 @@ def render_dashboard():
                         "output_format": output_format,
                         "report_path": str(report_path),
                         "report_filename": report_filename,
-                        "input_signature": current_upload_signature
+                        "input_signature": current_upload_signature,
+                        "preview_columns": combined_df.columns.tolist(),
+                        "preview_data": combined_df.head(10).fillna("").to_dict(orient="records"),
+                        "preview_shape": combined_df.shape,
                     }
 
                     st.success("✅ Harmonization completed successfully!")

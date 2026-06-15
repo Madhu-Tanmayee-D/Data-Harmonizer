@@ -13,7 +13,7 @@ toolbarMode = "viewer"
 maxUploadSize = 100
 enableXsrfProtection = true
 headless = true
-enableCORS = false
+enableCORS = true
 
 [logger]
 level = "info"
