@@ -1330,7 +1330,6 @@ def render_dashboard():
                     file_name=latest_result["download_filename"],
                     mime=latest_result["mime_type"],
                     key="latest_harmonized_download",
-                    on_click="ignore",
                     use_container_width=True
                 )
             else:
@@ -1346,7 +1345,6 @@ def render_dashboard():
                     file_name=latest_result["report_filename"],
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     key="latest_report_download",
-                    on_click="ignore",
                     use_container_width=True
                 )
             else:
