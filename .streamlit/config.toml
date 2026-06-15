@@ -10,7 +10,7 @@ showErrorDetails = false
 toolbarMode = "viewer"
 
 [server]
-maxUploadSize = 100
+maxUploadSize = 200
 enableXsrfProtection = true
 headless = true
 enableCORS = true
