@@ -21,7 +21,15 @@ def _format_size(size_bytes):
 def _safe_cell(value):
     if pd.isna(value):
         return ""
-    return str(value)
+    if isinstance(value, (int, float)):
+        return str(value)
+    if hasattr(value, 'isoformat'):  # datetime objects
+        return value.isoformat()
+    str_val = str(value)
+    # Filter out numpy/python object repr artifacts
+    if 'object at 0x' in str_val or str_val.startswith('<'):
+        return ""
+    return str_val
 
 
 def _add_table(doc, headers, rows):
@@ -398,11 +406,15 @@ def generate_report(
         doc.add_heading(f"Before Harmonization - {original_name}", level=2)
         if source_df is not None:
             preview = source_df.head(5).fillna("")
-            _add_table(doc, list(preview.columns[:min(10, len(preview.columns))]), preview.iloc[:, :min(10, len(preview.columns))].values.tolist())
+            preview_cols = list(preview.columns[:min(10, len(preview.columns))])
+            preview_rows = [[_safe_cell(val) for val in row] for row in preview.iloc[:, :min(10, len(preview.columns))].values.tolist()]
+            _add_table(doc, preview_cols, preview_rows)
 
     doc.add_heading("After Harmonization", level=2)
     after_preview = df.head(10).fillna("")
-    _add_table(doc, list(after_preview.columns[:min(10, len(after_preview.columns))]), after_preview.iloc[:, :min(10, len(after_preview.columns))].values.tolist())
+    after_cols = list(after_preview.columns[:min(10, len(after_preview.columns))])
+    after_rows = [[_safe_cell(val) for val in row] for row in after_preview.iloc[:, :min(10, len(after_preview.columns))].values.tolist()]
+    _add_table(doc, after_cols, after_rows)
 
     doc.add_heading("Processing Statistics Dashboard", level=1)
     total_columns_compared = sum(len(mapping) for mapping in mappings.values())

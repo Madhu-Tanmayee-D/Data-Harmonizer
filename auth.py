@@ -105,7 +105,7 @@ def login_user(username, password):
         
         # Update last login
         cursor.execute('UPDATE users SET last_login = ? WHERE user_id = ?',
-                      (datetime.now(), user_id))
+                      (datetime.now().isoformat(), user_id))
         conn.commit()
         
         return True, user_id, "Login successful"

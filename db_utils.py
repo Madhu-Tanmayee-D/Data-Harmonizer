@@ -83,9 +83,9 @@ def update_processing_status(
         # Normalize status capitalization
         status = str(status).strip().capitalize()
 
-        # Determine completion timestamp
+        # Determine completion timestamp (store as ISO format string for consistency)
         completion_time = (
-            datetime.now()
+            datetime.now().isoformat()
             if status in ['Completed', 'Failed', 'completed', 'failed']
             else None
         )

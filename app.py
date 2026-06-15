@@ -598,6 +598,12 @@ def _parse_timestamp(raw_date):
     raw_str = str(raw_date).strip()
     if not raw_str:
         return None
+    # Try ISO format first (what we now store in DB)
+    try:
+        return datetime.fromisoformat(raw_str)
+    except Exception:
+        pass
+    # Fallback to other formats
     for fmt in [
         "%Y-%m-%d %H:%M:%S.%f",
         "%Y-%m-%d %H:%M:%S",
@@ -608,10 +614,7 @@ def _parse_timestamp(raw_date):
             return datetime.strptime(raw_str, fmt)
         except Exception:
             continue
-    try:
-        return datetime.fromisoformat(raw_str)
-    except Exception:
-        return None
+    return None
 
 
 def _load_preview_dataframe(uploaded_file):
@@ -1482,32 +1485,41 @@ def render_history():
                 status_text = job.get("status", "Unknown").capitalize()
                 st.markdown(f'<div style="{content_style} font-weight: 500;">{status_text}</div>', unsafe_allow_html=True)
                 
-                # Get the raw timestamp
                 raw_date = job.get("completion_timestamp") or job.get("process_timestamp")
                 
+                date_part = "N/A"
+                formatted_time = "N/A"
+
                 if raw_date and raw_date != "N/A":
+                    # Attempt to parse using your helper
                     parsed_date = _parse_timestamp(raw_date)
+                    
                     if parsed_date:
                         date_part = parsed_date.strftime("%Y-%m-%d")
                         formatted_time = parsed_date.strftime("%H:%M:%S")
                     else:
-                        raw_str = str(raw_date)
-                        date_part = raw_str.split(' ', 1)[0]
-                        formatted_time = raw_str.split(' ', 1)[1][:8] if ' ' in raw_str else ''
+                        # Fallback for strings
+                        raw_str = str(raw_date).strip()
+                        # If the format is YYYY-MM-DD HH:MM:SS...
+                        if ' ' in raw_str:
+                            parts = raw_str.split(' ')
+                            date_part = parts[0]
+                            # Take the first part of the time segment (HH:MM:SS) 
+                            # ignoring potential milliseconds
+                            formatted_time = parts[1].split('.')[0] 
+                        else:
+                            date_part = raw_str
 
-                    st.markdown(f"""
-                        <div style="margin-top: 5px;">
-                            <div style="font-size: 0.7rem; color: #71717a; line-height: 1.2;">
-                                <strong>Processed Date:</strong> {date_part}
-                            </div>
-                            <div style="font-size: 0.7rem; color: #71717a; line-height: 1.2;">
-                                <strong>Processed Time:</strong> {formatted_time}
-                            </div>
+                st.markdown(f"""
+                    <div style="margin-top: 5px;">
+                        <div style="font-size: 0.7rem; color: #71717a; line-height: 1.2;">
+                            <strong>Processed Date:</strong> {date_part}
                         </div>
-                    """, unsafe_allow_html=True)
-
-                else:
-                    st.markdown('<div style="font-size: 0.7rem; color: #71717a;">N/A</div>', unsafe_allow_html=True)
+                        <div style="font-size: 0.7rem; color: #71717a; line-height: 1.2;">
+                            <strong>Processed Time:</strong> {formatted_time}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
             
             with col2:
                 st.markdown(f'<div style="{heading_style}">Dataset 1</div>', unsafe_allow_html=True)
