@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 from pathlib import Path
+import re
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -8,8 +9,29 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
+try:
+    from tzlocal import get_localzone
+except ImportError:
+    def get_localzone():
+        import time
+        return None
+
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+def _sanitize_filename(text):
+    """Sanitize text for use in Windows filenames."""
+    if not text:
+        return "unnamed"
+    # Replace invalid Windows filename characters
+    text = re.sub(r'[<>:"/\\|?*]', '_', str(text))
+    # Replace parentheses and other problematic chars
+    text = re.sub(r'[()\[\]{}]', '_', text)
+    # Remove trailing dots and spaces
+    text = text.rstrip('. ')
+    # Truncate to reasonable length
+    return text[:50] if len(text) > 50 else text
 
 
 def _format_size(size_bytes):
@@ -151,7 +173,8 @@ def _generate_distribution_analysis(df, reports_dir, timestamp):
             round(series.max(), 2),
         ])
 
-        hist_path = str(reports_dir / f"{col}_hist_{timestamp}.png")
+        safe_col = _sanitize_filename(col)
+        hist_path = str(reports_dir / f"{safe_col}_hist_{timestamp}.png")
 
         _save_histogram(
             series,
@@ -175,7 +198,8 @@ def _generate_distribution_analysis(df, reports_dir, timestamp):
                 int(count)
             ])
 
-        cat_chart = str(reports_dir / f"{col}_distribution_{timestamp}.png")
+        safe_col = _sanitize_filename(col)
+        cat_chart = str(reports_dir / f"{safe_col}_distribution_{timestamp}.png")
 
         _save_bar_chart(
             value_counts.index.astype(str).tolist(),
@@ -207,7 +231,15 @@ def generate_report(
     reports_dir = BASE_DIR / "outputs" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    report_timestamp = datetime.now()
+    # Generate timestamp with local timezone
+    try:
+        local_tz = get_localzone()
+        report_timestamp = datetime.now(local_tz) if local_tz else datetime.now()
+    except Exception:
+        report_timestamp = datetime.now()
+    
+    # Store as ISO format with timezone info
+    timestamp_iso = report_timestamp.isoformat()
     timestamp = report_timestamp.strftime("%Y%m%d_%H%M%S")
     if report_filename:
         safe_report_filename = report_filename

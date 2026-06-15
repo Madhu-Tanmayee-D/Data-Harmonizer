@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 import json
 from report_generator import generate_report
+import pytz
+from tzlocal import get_localzone
 # Local asset paths
 ROOT_DIR = Path(__file__).resolve().parent
 LOGO_PATH = ROOT_DIR / "Logo" / "Logo.png"
@@ -1118,6 +1120,13 @@ def render_home():
             if date_raw:
                 parsed_date = _parse_timestamp(date_raw)
                 if parsed_date:
+                    # Convert to local timezone if timezone-aware
+                    local_tz = get_localzone()
+                    if local_tz and parsed_date.tzinfo is not None:
+                        try:
+                            parsed_date = parsed_date.astimezone(local_tz)
+                        except Exception:
+                            pass
                     date_label = parsed_date.strftime('%Y-%m-%d')
                 else:
                     date_label = str(date_raw).split(' ', 1)[0]
@@ -1472,7 +1481,7 @@ def render_history():
         for job in processing_history:
             # Determine the color based on job status
             status_color = status_colors.get(job.get('status'), '#a1a1aa')
-            col1, col2, col3, col4, col5 = st.columns([0.8, 0.8, 0.8, 1.6, 1.6])
+            col1, col2, col3, col4, col5 = st.columns([0.6, 0.8, 0.8, 1.0, 1.0])
             
             # Headings remain gray and underlined
             heading_style = 'font-size: 0.9rem; color: #a1a1aa; text-transform: uppercase; text-decoration: underline; text-underline-offset: 4px;'
@@ -1485,41 +1494,49 @@ def render_history():
                 status_text = job.get("status", "Unknown").capitalize()
                 st.markdown(f'<div style="{content_style} font-weight: 500;">{status_text}</div>', unsafe_allow_html=True)
                 
+                # Get the raw timestamp
                 raw_date = job.get("completion_timestamp") or job.get("process_timestamp")
                 
-                date_part = "N/A"
-                formatted_time = "N/A"
+                local_tz = get_localzone()
 
                 if raw_date and raw_date != "N/A":
-                    # Attempt to parse using your helper
                     parsed_date = _parse_timestamp(raw_date)
                     
                     if parsed_date:
-                        date_part = parsed_date.strftime("%Y-%m-%d")
-                        formatted_time = parsed_date.strftime("%H:%M:%S")
+                        # If the date is naive (no timezone info), assume it's UTC
+                        if parsed_date.tzinfo is None:
+                            parsed_date = pytz.UTC.localize(parsed_date)
+                        
+                        # Convert to the server's system local timezone if available
+                        if local_tz:
+                            try:
+                                local_dt = parsed_date.astimezone(local_tz)
+                            except Exception:
+                                local_dt = parsed_date
+                        else:
+                            local_dt = parsed_date
+                        
+                        date_part = local_dt.strftime("%Y-%m-%d")
+                        formatted_time = local_dt.strftime("%H:%M:%S")
                     else:
                         # Fallback for strings
                         raw_str = str(raw_date).strip()
-                        # If the format is YYYY-MM-DD HH:MM:SS...
-                        if ' ' in raw_str:
-                            parts = raw_str.split(' ')
-                            date_part = parts[0]
-                            # Take the first part of the time segment (HH:MM:SS) 
-                            # ignoring potential milliseconds
-                            formatted_time = parts[1].split('.')[0] 
-                        else:
-                            date_part = raw_str
+                        date_part = raw_str.split(' ', 1)[0]
+                        formatted_time = raw_str.split(' ', 1)[1][:8] if ' ' in raw_str else ''
 
-                st.markdown(f"""
-                    <div style="margin-top: 5px;">
-                        <div style="font-size: 0.7rem; color: #71717a; line-height: 1.2;">
-                            <strong>Processed Date:</strong> {date_part}
+                    st.markdown(f"""
+                        <div style="margin-top: 5px;">
+                            <div style="font-size: 0.7rem; color: #71717a; line-height: 1.2;">
+                                <strong>Processed Date:</strong> {date_part}
+                            </div>
+                            <div style="font-size: 0.7rem; color: #71717a; line-height: 1.2;">
+                                <strong>Processed Time:</strong> {formatted_time}
+                            </div>
                         </div>
-                        <div style="font-size: 0.7rem; color: #71717a; line-height: 1.2;">
-                            <strong>Processed Time:</strong> {formatted_time}
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
+
+                else:
+                    st.markdown('<div style="font-size: 0.7rem; color: #71717a;">N/A</div>', unsafe_allow_html=True)
             
             with col2:
                 st.markdown(f'<div style="{heading_style}">Dataset 1</div>', unsafe_allow_html=True)

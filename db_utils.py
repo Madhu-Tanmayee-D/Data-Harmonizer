@@ -5,6 +5,23 @@ import os
 from datetime import datetime
 from database import get_db_connection, close_db_connection
 
+try:
+    from tzlocal import get_localzone
+except ImportError:
+    def get_localzone():
+        return None
+
+
+def _get_local_timestamp():
+    """Get current timestamp with local timezone info as ISO string."""
+    try:
+        local_tz = get_localzone()
+        if local_tz:
+            return datetime.now(local_tz).isoformat()
+    except Exception:
+        pass
+    return datetime.now().isoformat()
+
 
 def save_upload_record(user_id, filename, file_path, file_size, file_type='csv'):
     """
@@ -83,9 +100,9 @@ def update_processing_status(
         # Normalize status capitalization
         status = str(status).strip().capitalize()
 
-        # Determine completion timestamp (store as ISO format string for consistency)
+        # Determine completion timestamp (store as ISO format string with timezone)
         completion_time = (
-            datetime.now().isoformat()
+            _get_local_timestamp()
             if status in ['Completed', 'Failed', 'completed', 'failed']
             else None
         )

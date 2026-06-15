@@ -7,6 +7,23 @@ import secrets
 from datetime import datetime
 from database import get_db_connection, close_db_connection
 
+try:
+    from tzlocal import get_localzone
+except ImportError:
+    def get_localzone():
+        return None
+
+
+def _get_local_timestamp():
+    """Get current timestamp with local timezone info as ISO string."""
+    try:
+        local_tz = get_localzone()
+        if local_tz:
+            return datetime.now(local_tz).isoformat()
+    except Exception:
+        pass
+    return datetime.now().isoformat()
+
 
 def hash_password(password, salt=None):
     """
@@ -103,9 +120,9 @@ def login_user(username, password):
         if not verify_password(stored_hash, password):
             return False, None, "Invalid password"
         
-        # Update last login
+        # Update last login with timezone-aware timestamp
         cursor.execute('UPDATE users SET last_login = ? WHERE user_id = ?',
-                      (datetime.now().isoformat(), user_id))
+                      (_get_local_timestamp(), user_id))
         conn.commit()
         
         return True, user_id, "Login successful"
