@@ -326,7 +326,9 @@ def generate_report(
 
     title = doc.add_heading("DATA HARMONIZATION REPORT", level=0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    generated = doc.add_paragraph("Generated On: " + report_timestamp.strftime("%d %B %Y, %H:%M:%S"))
+    generated = doc.add_paragraph(
+    "Generated On: " + report_timestamp.strftime("%d %B %Y")
+    )
     generated.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     dataset_names = list(datasets.keys())
@@ -437,13 +439,13 @@ def generate_report(
         source_df = dataset_info.get("dataframe")
         doc.add_heading(f"Before Harmonization - {original_name}", level=2)
         if source_df is not None:
-            preview = source_df.head(5).fillna("")
+            preview = source_df.head(5).infer_objects(copy=False).fillna("")
             preview_cols = list(preview.columns[:min(10, len(preview.columns))])
             preview_rows = [[_safe_cell(val) for val in row] for row in preview.iloc[:, :min(10, len(preview.columns))].values.tolist()]
             _add_table(doc, preview_cols, preview_rows)
 
     doc.add_heading("After Harmonization", level=2)
-    after_preview = df.head(10).fillna("")
+    after_preview = df.head(10).infer_objects(copy=False).fillna("")
     after_cols = list(after_preview.columns[:min(10, len(after_preview.columns))])
     after_rows = [[_safe_cell(val) for val in row] for row in after_preview.iloc[:, :min(10, len(after_preview.columns))].values.tolist()]
     _add_table(doc, after_cols, after_rows)

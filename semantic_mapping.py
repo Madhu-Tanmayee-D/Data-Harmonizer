@@ -5,11 +5,18 @@ import requests  # Used to communicate with a cloud LLM API
 from sklearn.metrics.pairwise import cosine_similarity
 
 SentenceTransformer = None
+_st = None
 
-try:
-    import streamlit as st
-except Exception:
-    st = None
+
+def _get_streamlit():
+    global _st
+    if _st is None:
+        try:
+            import streamlit as st
+            _st = st
+        except Exception:
+            _st = None
+    return _st
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
@@ -23,6 +30,7 @@ HUGGINGFACE_API_TIMEOUT = int(os.getenv("HUGGINGFACE_API_TIMEOUT", "30"))
 
 def get_st_secret(key, default="", section=None):
     """Safely retrieve Streamlit secrets, with graceful fallback."""
+    st = _get_streamlit()
     if st is None:
         return str(default).strip()
     try:
@@ -39,6 +47,7 @@ def _load_st_secrets():
     global OPENAI_API_KEY, OPENAI_MODEL, OPENAI_API_BASE, OPENAI_API_TIMEOUT
     global HUGGINGFACE_API_KEY, HUGGINGFACE_MODEL, HUGGINGFACE_API_BASE, HUGGINGFACE_API_TIMEOUT
     
+    st = _get_streamlit()
     if st is None:
         return
     

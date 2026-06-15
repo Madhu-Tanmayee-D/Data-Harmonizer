@@ -635,6 +635,16 @@ def _load_preview_dataframe(uploaded_file):
         return None
 
 
+def _safe_dataframe_for_display(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None:
+        return df
+    safe_df = df.copy()
+    for column in safe_df.columns:
+        if safe_df[column].dtype == object:
+            safe_df[column] = safe_df[column].astype("string")
+    return safe_df
+
+
 def render_auth_page():
     """Render unified seamless login and signup views cleanly styled."""
     st.markdown("""
@@ -1130,7 +1140,8 @@ def render_home():
                     date_label = parsed_date.strftime('%Y-%m-%d')
                 else:
                     date_label = str(date_raw).split(' ', 1)[0]
-            
+
+            status = str(job.get("status", "Unknown")).capitalize()
             harmonized_name = job.get('harmonized_filename') or 'Unnamed Harmonized Dataset'
             report_name = job.get('report_filename') or 'No report'
             
@@ -1217,7 +1228,7 @@ def render_dashboard():
                     st.markdown(f"<div style='font-weight:600;margin-bottom:0.4rem;'>Dataset 1: {file1.name}</div>", unsafe_allow_html=True)
                     st.markdown(f"<div style='color:#94a3b8;margin-bottom:0.6rem;'>Rows: {df_preview_1.shape[0]} | Columns: {df_preview_1.shape[1]}</div>", unsafe_allow_html=True)
                     # Reduced height to 150 (or your preferred size)
-                    st.dataframe(df_preview_1.head(5), use_container_width=True, height=150)
+                    st.dataframe(_safe_dataframe_for_display(df_preview_1.head(5)), use_container_width=True, height=150)
                 else:
                     st.warning("Unable to preview Dataset 1.")
 
@@ -1228,7 +1239,7 @@ def render_dashboard():
                     st.markdown(f"<div style='font-weight:600;margin-bottom:0.4rem;'>Dataset 2: {file2.name}</div>", unsafe_allow_html=True)
                     st.markdown(f"<div style='color:#94a3b8;margin-bottom:0.6rem;'>Rows: {df_preview_2.shape[0]} | Columns: {df_preview_2.shape[1]}</div>", unsafe_allow_html=True)
                     # Reduced height to 150 (or your preferred size)
-                    st.dataframe(df_preview_2.head(5), use_container_width=True, height=150)
+                    st.dataframe(_safe_dataframe_for_display(df_preview_2.head(5)), use_container_width=True, height=150)
                 else:
                     st.warning("Unable to preview Dataset 2.")
 
@@ -1239,6 +1250,7 @@ def render_dashboard():
         and latest_result.get("input_signature") != current_upload_signature
     ):
         st.session_state.pop("latest_harmonization_result", None)
+        st.session_state.pop("latest_harmonization_preview", None)
     
     st.markdown("<div style='margin-top: 0.9rem;'></div>", unsafe_allow_html=True)
 
@@ -1339,20 +1351,6 @@ def render_dashboard():
                         processing_seconds=processing_seconds
                     )
 
-                    st.success("Harmonization complete!")
-                    
-                    # Prepare preview data from the processed dataframe
-                    preview_df = combined_df.head(20) # Showing top 20 rows
-                    st.markdown("<div style='margin-top:1.5rem;'></div>", unsafe_allow_html=True)
-                    st.subheader("Harmonized Dataset Preview")
-                    st.markdown(f"Rows: {combined_df.shape[0]} | Columns: {combined_df.shape[1]}")
-                    
-                    st.dataframe(
-                        preview_df, 
-                        use_container_width=True, 
-                        height=180
-                    )
-
                     # 5. Finalize Records and Cleanup
                     file_size_bytes = os.path.getsize(output_path)
 
@@ -1388,7 +1386,7 @@ def render_dashboard():
                         "report_filename": report_filename,
                         "input_signature": current_upload_signature,
                         "preview_columns": combined_df.columns.tolist(),
-                        "preview_data": combined_df.head(10).fillna("").to_dict(orient="records"),
+                        "preview_data": combined_df.head(10).infer_objects(copy=False).fillna("").to_dict(orient="records"),
                         "preview_shape": combined_df.shape,
                     }
 
@@ -1400,6 +1398,7 @@ def render_dashboard():
                     st.error(f"❌ Error during processing: {str(e)}")
 
         latest_result = st.session_state.get("latest_harmonization_result")
+
 
         st.markdown("""
         <style>
@@ -1429,8 +1428,52 @@ def render_dashboard():
         }
         </style>
         """, unsafe_allow_html=True)
-        
+
+        # ----------------------------
+        # 1. PREVIEW (ALWAYS FIRST)
+        # ----------------------------
+
         if latest_result:
+
+            preview_df = None
+
+            # 1. session state (preferred)
+            if st.session_state.get("latest_harmonization_preview") is not None:
+                preview_df = st.session_state.latest_harmonization_preview
+
+            # 2. fallback
+            elif latest_result.get("preview_data") and latest_result.get("preview_columns"):
+                preview_df = pd.DataFrame(latest_result["preview_data"])
+
+                if isinstance(latest_result.get("preview_columns"), list):
+                    preview_cols = [
+                        c for c in latest_result["preview_columns"]
+                        if c in preview_df.columns
+                    ]
+                    preview_df = preview_df[preview_cols]
+
+            # render preview
+            if preview_df is not None and not preview_df.empty:
+                st.markdown("<div style='margin-top:1.5rem;'></div>", unsafe_allow_html=True)
+                st.subheader("Harmonized Dataset Preview")
+
+                st.markdown(
+                    f"Rows: {latest_result.get('row_count', preview_df.shape[0])} | "
+                    f"Columns: {latest_result.get('column_count', preview_df.shape[1])}"
+                )
+
+                st.dataframe(
+                    _safe_dataframe_for_display(preview_df),
+                    use_container_width=True,
+                    height=180
+                )
+            else:
+                st.info("No preview available")
+
+            # ----------------------------
+            # 2. DOWNLOAD DATASET
+            # ----------------------------
+
             file_data = read_download_bytes(latest_result["output_path"])
 
             if file_data is not None:
@@ -1445,8 +1488,14 @@ def render_dashboard():
             else:
                 st.warning("Harmonized dataset file not found")
 
+            # ----------------------------
+            # 3. REPORT SECTION
+            # ----------------------------
+
             st.subheader("Harmonization Report")
+
             report_data = read_download_bytes(latest_result["report_path"])
+
             if report_data is not None:
                 st.success("Report generated successfully")
                 st.download_button(
@@ -1460,166 +1509,118 @@ def render_dashboard():
             else:
                 st.warning("Report not found")
 
-
 def render_history():
-    """Render history page with consistent coloring across all columns."""
-    st.markdown(
-        """
-        <div style="font-size: 2.5rem;">
-            <h1 class='main-header' style='font-size: inherit !important;'>History</h1>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
-    
-    processing_history = get_user_processing_history(st.session_state.user_id)
+    st.markdown("""
+    <div style='font-size: 2.5rem;'>
+        <h1 class='main-header' style='font-size: inherit !important;'>History</h1>
+    </div>
+    """, unsafe_allow_html=True)
 
-    if processing_history:
-        status_colors = {'Completed': '#22c55e', 'Processing': '#3b82f6', 'Failed': '#ef4444', 'Pending': '#a1a1aa'}
-        
-        for job in processing_history:
-            # Determine the color based on job status
-            status_color = status_colors.get(job.get('status'), '#a1a1aa')
-            col1, col2, col3, col4, col5 = st.columns([0.6, 0.8, 0.8, 1.0, 1.0])
-            
-            # Headings remain gray and underlined
-            heading_style = 'font-size: 0.9rem; color: #a1a1aa; text-transform: uppercase; text-decoration: underline; text-underline-offset: 4px;'
-            
-            # Content: Applies the status_color to all data fields
-            content_style = f'font-size: 0.85rem; margin-top: 5px; color: {status_color};'
-            
-            with col1:
-                st.markdown(f'<div style="{heading_style}">Status</div>', unsafe_allow_html=True)
-                status_text = job.get("status", "Unknown").capitalize()
-                st.markdown(f'<div style="{content_style} font-weight: 500;">{status_text}</div>', unsafe_allow_html=True)
-                
-                # Get the raw timestamp
-                raw_date = job.get("completion_timestamp") or job.get("process_timestamp")
-                
-                local_tz = get_localzone()
+    try:
+        processing_history = get_user_processing_history(st.session_state.user_id)
+    except Exception:
+        processing_history = []
 
-                if raw_date and raw_date != "N/A":
-                    parsed_date = _parse_timestamp(raw_date)
-                    
-                    if parsed_date:
-                        # If the date is naive (no timezone info), assume it's UTC
-                        if parsed_date.tzinfo is None:
-                            parsed_date = pytz.UTC.localize(parsed_date)
-                        
-                        # Convert to the server's system local timezone if available
-                        if local_tz:
-                            try:
-                                local_dt = parsed_date.astimezone(local_tz)
-                            except Exception:
-                                local_dt = parsed_date
-                        else:
-                            local_dt = parsed_date
-                        
-                        date_part = local_dt.strftime("%Y-%m-%d")
-                        formatted_time = local_dt.strftime("%H:%M:%S")
-                    else:
-                        # Fallback for strings
-                        raw_str = str(raw_date).strip()
-                        date_part = raw_str.split(' ', 1)[0]
-                        formatted_time = raw_str.split(' ', 1)[1][:8] if ' ' in raw_str else ''
-
-                    st.markdown(f"""
-                        <div style="margin-top: 5px;">
-                            <div style="font-size: 0.7rem; color: #71717a; line-height: 1.2;">
-                                <strong>Processed Date:</strong> {date_part}
-                            </div>
-                            <div style="font-size: 0.7rem; color: #71717a; line-height: 1.2;">
-                                <strong>Processed Time:</strong> {formatted_time}
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-                else:
-                    st.markdown('<div style="font-size: 0.7rem; color: #71717a;">N/A</div>', unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown(f'<div style="{heading_style}">Dataset 1</div>', unsafe_allow_html=True)
-
-                name = job.get("dataset1", "N/A")
-                st.markdown(
-                    f'<div style="{content_style}">{name}</div>',
-                    unsafe_allow_html=True
-                )
-
-                if job.get("size1"):
-                    size_mb = round(job["size1"] / (1024 * 1024), 2)
-                    st.markdown(
-                        f'<div style="font-size: 0.65rem; color: #71717a; margin-top: 2px;">{size_mb} MB</div>',
-                        unsafe_allow_html=True
-                    )
-
-
-            with col3:
-                st.markdown(f'<div style="{heading_style}">Dataset 2</div>', unsafe_allow_html=True)
-
-                name = job.get("dataset2", "N/A")
-                st.markdown(
-                    f'<div style="{content_style}">{name}</div>',
-                    unsafe_allow_html=True
-                )
-
-                if job.get("size2"):
-                    size_mb = round(job.get("size2", 0) / (1024 * 1024), 2)
-                    st.markdown(
-                        f'<div style="font-size: 0.65rem; color: #71717a; margin-top: 2px;">{size_mb} MB</div>',
-                        unsafe_allow_html=True
-                    )
-
-            with col4:
-                st.markdown(f'<div style="{heading_style}">Harmonized</div>', unsafe_allow_html=True)
-
-                name = job.get("harmonized_filename", "N/A")
-                st.markdown(
-                    f'<div style="{content_style}">{name}</div>',
-                    unsafe_allow_html=True
-                )
-
-                if job.get("harmonized_size"):
-                    size_mb = round(job.get("harmonized_size", 0) / (1024 * 1024), 2)
-                    st.markdown(
-                        f'<div style="font-size: 0.65rem; color: #71717a; margin-top: 2px;">{size_mb} MB</div>',
-                        unsafe_allow_html=True
-                    )
-
-
-            with col5:
-                st.markdown(f'<div style="{heading_style}">Report</div>', unsafe_allow_html=True)
-
-                name = job.get("report_filename", "N/A")
-                st.markdown(
-                    f'<div style="{content_style}">{name}</div>',
-                    unsafe_allow_html=True
-                )
-
-                if job.get("report_path"):
-                    try:
-                        size_mb = round(
-                            os.path.getsize(job["report_path"]) / (1024 * 1024),
-                            2
-                        )
-                        st.markdown(
-                            f'<div style="font-size: 0.65rem; color: #71717a; margin-top: 2px;">{size_mb} MB</div>',
-                            unsafe_allow_html=True
-                        )
-                    except:
-                        st.markdown(
-                            '<div style="font-size: 0.65rem; color: #71717a; margin-top: 2px;">N/A</div>',
-                            unsafe_allow_html=True
-                        )
-            st.markdown(
-                "<hr style='margin: 0.8rem 0; border: none; border-top: 1px solid #27272a;'>",
-                unsafe_allow_html=True
-            )
-
-            st.markdown("<div style='margin-bottom:3rem;'></div>", unsafe_allow_html=True)
-    else:
+    if not processing_history:
         st.info("No processing history yet")
+        return
+
+    st.markdown("""
+    <style>
+        .history-row .stVerticalBlock > div {
+            min-width: 0 !important;
+        }
+        .history-column-divider {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            padding-left: 12px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    heading_style = "font-size:0.82rem; color:#94a3b8; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:0.6rem;"
+    content_style = "font-size:0.95rem; color:#f8fafc; line-height:1.4;"
+
+    for job in processing_history:
+        st.markdown("<div style='margin-top:2.6rem;'></div>", unsafe_allow_html=True)
+        cols = st.columns([0.8, 1.2, 1.2, 2, 2], gap="small")
+
+        with cols[0]:
+            st.markdown(f'<div style="{heading_style}">Status</div>', unsafe_allow_html=True)
+            status_text = str(job.get("status", "Unknown")).capitalize()
+            st.markdown(f'<div style="{content_style} font-weight:600;">{status_text}</div>', unsafe_allow_html=True)
+
+            raw_date = job.get("completion_timestamp") or job.get("process_timestamp")
+            if raw_date:
+                parsed_date = _parse_timestamp(raw_date)
+                if parsed_date and parsed_date.tzinfo is None:
+                    parsed_date = pytz.UTC.localize(parsed_date)
+                if parsed_date:
+                    # local_dt = parsed_date.astimezone(pytz.timezone("Asia/Kolkata"))
+                    local_dt = parsed_date
+                    date_part = local_dt.strftime("%Y-%m-%d")
+                    formatted_time = local_dt.strftime("%H:%M:%S")
+                    st.markdown(f'<div style="font-size:0.75rem; color:#94a3b8; margin-top:0.5rem;">{date_part}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<!-- <div style="font-size:0.75rem; color:#94a3b8; margin-top:0.25rem;">{formatted_time}</div> -->', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div style="font-size:0.75rem; color:#94a3b8; margin-top:0.5rem;">{str(raw_date)}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div style="font-size:0.75rem; color:#71717a; margin-top:0.5rem;">N/A</div>', unsafe_allow_html=True)
+
+        with cols[1]:
+            dataset_1_size = ''
+            if job.get('size1'):
+                dataset_1_size = f'<div style="font-size:0.75rem; color:#94a3b8; margin-top:0.35rem;">{round(job["size1"] / (1024 * 1024), 2)} MB</div>'
+            st.markdown(f"""
+                <div class="history-column-divider">
+                    <div style="{heading_style}">Dataset 1</div>
+                    <div style="{content_style}">{job.get('dataset1', 'N/A')}</div>
+                    {dataset_1_size}
+                </div>
+            """, unsafe_allow_html=True)
+
+        with cols[2]:
+            dataset_2_size = ''
+            if job.get('size2'):
+                dataset_2_size = f'<div style="font-size:0.75rem; color:#94a3b8; margin-top:0.35rem;">{round(job.get("size2", 0) / (1024 * 1024), 2)} MB</div>'
+            st.markdown(f"""
+                <div class="history-column-divider">
+                    <div style="{heading_style}">Dataset 2</div>
+                    <div style="{content_style}">{job.get('dataset2', 'N/A')}</div>
+                    {dataset_2_size}
+                </div>
+            """, unsafe_allow_html=True)
+
+        with cols[3]:
+            harmonized_size = ''
+            if job.get('harmonized_size'):
+                harmonized_size = f'<div style="font-size:0.75rem; color:#94a3b8; margin-top:0.35rem;">{round(job.get("harmonized_size", 0) / (1024 * 1024), 2)} MB</div>'
+            st.markdown(f"""
+                <div class="history-column-divider">
+                    <div style="{heading_style}">Harmonized</div>
+                    <div style="{content_style}">{job.get('harmonized_filename', 'N/A')}</div>
+                    {harmonized_size}
+                </div>
+            """, unsafe_allow_html=True)
+
+        with cols[4]:
+            report_size_line = ''
+            if job.get('report_path'):
+                try:
+                    size_mb = round(os.path.getsize(job['report_path']) / (1024 * 1024), 2)
+                    report_size_line = f'<div style="font-size:0.75rem; color:#94a3b8; margin-top:0.35rem;">{size_mb} MB</div>'
+                except Exception:
+                    report_size_line = '<div style="font-size:0.75rem; color:#71717a; margin-top:0.35rem;">N/A</div>'
+            st.markdown(f"""
+                <div class="history-column-divider">
+                    <div style="{heading_style}">Report</div>
+                    <div style="{content_style}">{job.get('report_filename', 'N/A')}</div>
+                    {report_size_line}
+                </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<hr style='margin: -0.0rem 0 1.2rem 0; border: none; border-top: 1px solid #27272a;'>", unsafe_allow_html=True)
 
 
 def render_settings():
