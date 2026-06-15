@@ -106,6 +106,12 @@ def _json_serializable_fallback(obj):
     return str(obj)
 
 
+def _normalize_text(value):
+    if value is None:
+        return ""
+    return " ".join(str(value).strip().lower().replace("_", " ").split())
+
+
 def _normalize_template_columns(template_columns):
     if template_columns is None:
         return CANONICAL_TEMPLATE
@@ -190,9 +196,36 @@ def _generate_embedding_matches(dataset_columns, template_columns, sample_rows=N
             value = row.get(col, None)
             if value is not None and not pd.isna(value):
                 values.append(value)
-            if len(values) >= 3:
+            if len(values) >= 5:
                 break
         sample_values_by_col[col] = values
+
+    exact_matches = {}
+
+    # Exact normalized matches boost confidence for clearly aligned column names.
+    for col in source_cols:
+        normalized_source = _normalize_text(col)
+        for target in target_cols:
+            target_label = target
+            target_description = template_columns.get(target)
+            normalized_target = _normalize_text(target_label)
+            normalized_target_desc = _normalize_text(
+                target_description.get("semantic_name")
+                if isinstance(target_description, dict)
+                else target_description
+            )
+            if normalized_source and (normalized_source == normalized_target or normalized_source == normalized_target_desc):
+                exact_matches[col] = {
+                    "target": target,
+                    "score": 1.0,
+                    "second_score": 0.0,
+                    "candidates": [
+                        {"target": target, "score": 1.0}
+                    ]
+                }
+                break
+        if col in exact_matches:
+            continue
 
     source_texts = [
         _build_column_text(col, dataset_columns[col], sample_values=sample_values_by_col.get(col))
@@ -224,6 +257,10 @@ def _generate_embedding_matches(dataset_columns, template_columns, sample_rows=N
                 for i in sorted_indexes[:3]
             ]
         }
+
+    # Preserve exact normalized column matches when found.
+    for col, match_info in exact_matches.items():
+        matches[col] = match_info
 
     return matches
 
@@ -446,6 +483,7 @@ def run_semantic_mapping(
         )
     )
 
+    template_columns = _normalize_template_columns(None)
     all_mappings = {}
     all_reasonings = {}
 
